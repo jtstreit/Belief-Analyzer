@@ -12,27 +12,62 @@ const router = Router();
 // ─────────────────────────────────────────────────────────────
 // Exercise catalog — keyword detection for recommendations
 // ─────────────────────────────────────────────────────────────
-const EXERCISE_KEYWORD_MAP: { id: string; title: string; keywords: string[] }[] = [
-  { id: 'rebt-abcde', title: 'ABCDE Worksheet', keywords: ['abcde worksheet', 'abcde'] },
-  { id: 'rebt-shame-attacking', title: 'Shame-Attacking Exercise', keywords: ['shame-attacking exercise', 'shame attacking exercise', 'shame-attacking'] },
-  { id: 'rebt-rational-imagery', title: 'Rational-Emotive Imagery', keywords: ['rational-emotive imagery', 'rational emotive imagery'] },
-  { id: 'rebt-rational-cards', title: 'Rational Coping Cards', keywords: ['rational coping cards', 'coping cards'] },
-  { id: 'cbt-thought-record-7col', title: '7-Column Thought Record', keywords: ['7-column thought record', '7 column thought record', 'thought record'] },
-  { id: 'cbt-triple-column', title: 'Triple Column Technique', keywords: ['triple column technique', 'triple column'] },
-  { id: 'cbt-downward-arrow', title: 'Downward Arrow', keywords: ['downward arrow'] },
-  { id: 'cbt-behavioral-experiment', title: 'Behavioral Experiment', keywords: ['behavioral experiment', 'behavioural experiment'] },
-  { id: 'beh-activation', title: 'Behavioral Activation', keywords: ['behavioral activation', 'behavioural activation'] },
-  { id: 'beh-exposure-hierarchy', title: 'Fear Hierarchy Builder', keywords: ['exposure hierarchy', 'fear hierarchy', 'fear hierarchy builder'] },
-  { id: 'beh-exposure-session', title: 'Graded Exposure Session', keywords: ['graded exposure session', 'graded exposure', 'exposure session'] },
-  { id: 'beh-problem-solving', title: 'Problem Solving', keywords: ['problem-solving exercise', 'problem solving exercise'] },
-  { id: 'beh-worry-postponement', title: 'Worry Postponement', keywords: ['worry postponement'] },
+const EXERCISE_KEYWORD_MAP: { id: string; title: string; keywords: string[]; targetProcesses: string[] }[] = [
+  { id: 'rebt-abcde',           title: 'ABCDE Worksheet',          keywords: ['abcde worksheet', 'abcde'],                                                       targetProcesses: ['demandingness', 'awfulizing', 'low_frustration_tolerance', 'global_rating'] },
+  { id: 'rebt-shame-attacking', title: 'Shame-Attacking Exercise',  keywords: ['shame-attacking exercise', 'shame attacking exercise', 'shame-attacking'],        targetProcesses: ['low_frustration_tolerance', 'global_rating', 'need_for_approval'] },
+  { id: 'rebt-rational-imagery',title: 'Rational-Emotive Imagery',  keywords: ['rational-emotive imagery', 'rational emotive imagery'],                          targetProcesses: ['awfulizing', 'low_frustration_tolerance', 'global_rating'] },
+  { id: 'rebt-rational-cards',  title: 'Rational Coping Cards',     keywords: ['rational coping cards', 'coping cards'],                                         targetProcesses: ['demandingness', 'awfulizing', 'low_frustration_tolerance', 'global_rating'] },
+  { id: 'cbt-thought-record-7col', title: '7-Column Thought Record',keywords: ['7-column thought record', '7 column thought record', 'thought record'],          targetProcesses: ['automatic_thoughts', 'cognitive_distortions', 'hot_thought'] },
+  { id: 'cbt-triple-column',    title: 'Triple Column Technique',   keywords: ['triple column technique', 'triple column'],                                      targetProcesses: ['automatic_thoughts', 'cognitive_distortions'] },
+  { id: 'cbt-downward-arrow',   title: 'Downward Arrow',            keywords: ['downward arrow'],                                                                 targetProcesses: ['intermediate_beliefs', 'core_beliefs'] },
+  { id: 'cbt-behavioral-experiment', title: 'Behavioral Experiment',keywords: ['behavioral experiment', 'behavioural experiment'],                               targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'safety_behaviours'] },
+  { id: 'beh-activation',       title: 'Behavioral Activation',     keywords: ['behavioral activation', 'behavioural activation'],                               targetProcesses: ['avoidance', 'withdrawal', 'anhedonia'] },
+  { id: 'beh-exposure-hierarchy',title: 'Fear Hierarchy Builder',   keywords: ['exposure hierarchy', 'fear hierarchy', 'fear hierarchy builder'],                 targetProcesses: ['avoidance', 'safety_behaviours', 'fear'] },
+  { id: 'beh-exposure-session', title: 'Graded Exposure Session',   keywords: ['graded exposure session', 'graded exposure', 'exposure session'],                 targetProcesses: ['avoidance', 'fear'] },
+  { id: 'beh-problem-solving',  title: 'Problem Solving',           keywords: ['problem-solving exercise', 'problem solving exercise'],                          targetProcesses: ['avoidance', 'rumination'] },
+  { id: 'beh-worry-postponement',title: 'Worry Postponement',       keywords: ['worry postponement'],                                                             targetProcesses: ['rumination', 'worry'] },
 ];
 
-function detectRecommendedExercise(text: string): { id: string; title: string } | null {
+/**
+ * Maps a database beliefType value to the exercise targetProcesses vocabulary.
+ * DB types come from the cognitive engine; exercise processes come from the catalog.
+ */
+const BELIEF_TYPE_TO_PROCESSES: Record<string, string[]> = {
+  demandingness:           ['demandingness'],
+  should_statements:       ['demandingness'],
+  awfulizing:              ['awfulizing'],
+  catastrophizing:         ['awfulizing'],
+  low_frustration_tolerance: ['low_frustration_tolerance'],
+  global_rating:           ['global_rating'],
+  automatic_thoughts:      ['automatic_thoughts'],
+  cognitive_distortions:   ['cognitive_distortions'],
+  core_beliefs:            ['core_beliefs', 'intermediate_beliefs'],
+  need_for_approval:       ['need_for_approval'],
+  avoidance:               ['avoidance'],
+  rumination:              ['rumination'],
+  worry:                   ['worry'],
+  fear:                    ['fear'],
+};
+
+/**
+ * Detects whether Vera recommended a specific exercise in her response.
+ * When `activeProcesses` is non-empty, only returns an exercise whose
+ * targetProcesses overlaps with the user's currently active belief processes —
+ * preventing false positives when an exercise is mentioned only in passing.
+ */
+function detectRecommendedExercise(
+  text: string,
+  activeProcesses: string[],
+): { id: string; title: string } | null {
   const lower = text.toLowerCase();
   for (const exercise of EXERCISE_KEYWORD_MAP) {
     for (const kw of exercise.keywords) {
       if (lower.includes(kw)) {
+        // If we know the user's active processes, require at least one overlap.
+        if (activeProcesses.length > 0) {
+          const relevant = exercise.targetProcesses.some(p => activeProcesses.includes(p));
+          if (!relevant) continue;
+        }
         return { id: exercise.id, title: exercise.title };
       }
     }
@@ -432,8 +467,16 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       content: fullResponse,
     });
 
+    // Derive the therapeutic processes currently active for this user so we can
+    // filter exercise recommendations to only contextually appropriate ones.
+    const activeProcesses = [
+      ...new Set(
+        activeBeliefs.flatMap(b => BELIEF_TYPE_TO_PROCESSES[b.beliefType] ?? [])
+      ),
+    ];
+
     // Detect if Vera recommended an exercise and emit it as a structured event
-    const recommendedExercise = detectRecommendedExercise(fullResponse);
+    const recommendedExercise = detectRecommendedExercise(fullResponse, activeProcesses);
     if (recommendedExercise) {
       res.write(`data: ${JSON.stringify({ recommendedExercise })}\n\n`);
     }

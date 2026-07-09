@@ -213,12 +213,55 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       content: parsed.data.content,
     });
 
-    // Fetch full history for context
-    const history = await db
-      .select()
-      .from(msgTable)
-      .where(eq(msgTable.conversationId, id))
-      .orderBy(msgTable.createdAt);
+    // Fetch full history for this conversation + cross-session memory in parallel
+    const [history, allBeliefs, pastConvos] = await Promise.all([
+      db.select().from(msgTable).where(eq(msgTable.conversationId, id)).orderBy(msgTable.createdAt),
+      db.select().from(beliefsTable).orderBy(desc(beliefsTable.createdAt)),
+      // Last 2 messages from each other conversation for cross-session context
+      db.select().from(msgTable)
+        .where(eq(msgTable.role, "assistant"))
+        .orderBy(desc(msgTable.createdAt))
+        .limit(6),
+    ]);
+
+    // Build persistent memory block
+    const activeBeliefs = allBeliefs.filter(b => b.status === "active");
+    const challengedBeliefs = allBeliefs.filter(b => b.status === "challenged");
+    const resolvedBeliefs = allBeliefs.filter(b => b.status === "resolved");
+
+    const beliefLines = [
+      ...activeBeliefs.map(b =>
+        `  - [ACTIVE] ${b.beliefType.replace(/_/g, " ")}: "${b.beliefText}"${b.triggerSituation ? ` (triggered by: ${b.triggerSituation})` : ""}`
+      ),
+      ...challengedBeliefs.map(b =>
+        `  - [IN PROGRESS] ${b.beliefType.replace(/_/g, " ")}: "${b.beliefText}"`
+      ),
+      ...resolvedBeliefs.map(b =>
+        `  - [RESOLVED] ${b.beliefType.replace(/_/g, " ")}: "${b.beliefText}"`
+      ),
+    ];
+
+    // Summaries from other sessions (exclude messages in this conversation)
+    const otherSessionMessages = pastConvos
+      .filter(m => m.conversationId !== id)
+      .slice(0, 4)
+      .map(m => `  - ${m.content.slice(0, 200).replace(/\n/g, " ")}…`);
+
+    const memoryBlock = [
+      "## Persistent User Memory",
+      "",
+      beliefLines.length > 0
+        ? `### Identified Irrational Beliefs (${allBeliefs.length} total)\n${beliefLines.join("\n")}`
+        : "### No beliefs identified yet.",
+      "",
+      otherSessionMessages.length > 0
+        ? `### Recent insights from past sessions\n${otherSessionMessages.join("\n")}`
+        : "",
+      "",
+      "Use this memory to track progress, reference past breakthroughs, and avoid repeating ground already covered. If a belief is marked RESOLVED, acknowledge the progress warmly. If ACTIVE, you may gently reference it when relevant.",
+    ].filter(Boolean).join("\n");
+
+    const systemPromptWithMemory = `${REBT_SYSTEM_PROMPT}\n\n${memoryBlock}`;
 
     const chatMessages = history.map((m) => ({
       role: m.role as "user" | "assistant" | "system",
@@ -235,7 +278,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       model: "deepseek-chat",
       max_completion_tokens: 1024,
       messages: [
-        { role: "system", content: REBT_SYSTEM_PROMPT },
+        { role: "system", content: systemPromptWithMemory },
         ...chatMessages,
       ],
       stream: true,

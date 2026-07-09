@@ -6,9 +6,9 @@ import { useListBeliefs, getListBeliefsQueryKey, useGetPatterns } from '@workspa
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn, SlideInDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const StatCounter = ({ value, label, primary, streak }: { value: number, label: string, primary?: boolean, streak?: boolean }) => {
+  const colors = useColors();
   const [count, setCount] = useState(0);
   useEffect(() => {
     let start = 0;
@@ -37,19 +37,18 @@ const StatCounter = ({ value, label, primary, streak }: { value: number, label: 
   const animatedGlow = useAnimatedStyle(() => {
     if (!streak) return {};
     return {
-      shadowColor: '#F59E0B',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.3 + pulse.value * 0.4,
-      shadowRadius: 8 + pulse.value * 8,
-      elevation: 4 + pulse.value * 6,
+      shadowColor: colors.accent,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15 + pulse.value * 0.2,
+      shadowRadius: 8 + pulse.value * 6,
+      elevation: 3 + pulse.value * 4,
     };
   });
 
   return (
-    <Animated.View style={[styles.statCardContainer, animatedGlow]}>
-      <LinearGradient colors={['#1E2540', '#141928']} style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />
-      <Text style={[styles.statValue, { color: primary ? '#F59E0B' : '#F0F2F8' }]}>{count}</Text>
-      <Text style={[styles.statLabel, { color: '#6B7194' }]}>{label}</Text>
+    <Animated.View style={[styles.statCardContainer, animatedGlow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.statValue, { color: primary ? colors.accent : colors.foreground }]}>{count}</Text>
+      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
     </Animated.View>
   );
 };
@@ -78,11 +77,11 @@ export default function TabOneScreen() {
     ctaGlowPulse.value = withRepeat(withSequence(withTiming(1, { duration: 2000 }), withTiming(0.5, { duration: 2000 })), -1, true);
   }, []);
   const ctaStyle = useAnimatedStyle(() => ({
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: ctaGlowPulse.value * 0.6,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: ctaGlowPulse.value * 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   }));
 
   return (
@@ -145,7 +144,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 20, gap: 32 },
   greeting: { fontSize: 28, fontFamily: 'Inter_700Bold', marginTop: 20 },
   statsRow: { flexDirection: 'row', gap: 12 },
-  statCardContainer: { flex: 1, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: '#252B42', alignItems: 'center', gap: 4, overflow: 'hidden' },
+  statCardContainer: { flex: 1, padding: 16, borderRadius: 16, borderWidth: 1, alignItems: 'center', gap: 4, overflow: 'hidden' },
   statValue: { fontSize: 24, fontFamily: 'Inter_700Bold' },
   statLabel: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   section: { gap: 16 },

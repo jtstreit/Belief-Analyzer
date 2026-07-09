@@ -26,9 +26,9 @@ const CATEGORY_FILTERS: (ExerciseCategory | 'all')[] = [
 ];
 
 const MODALITY_COLORS = {
-  rebt: '#F59E0B',
-  cbt:  '#6366F1',
-  both: '#10B981',
+  rebt: '#D4823A',
+  cbt:  '#4A8A9E',
+  both: '#4A9E6F',
 };
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -59,7 +59,7 @@ export default function LibraryScreen() {
     });
   }, [modality, issueFilter, categoryFilter, showAll]);
 
-  const activeColor = modality === 'rebt' ? '#F59E0B' : '#6366F1';
+  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
 
   const renderExercise = ({ item, index }: { item: Exercise; index: number }) => {
     const scale = useSharedValue(1);
@@ -146,7 +146,7 @@ export default function LibraryScreen() {
               ]}
               onPress={() => setIssueFilter(issue)}
             >
-              <Text style={[styles.chipText, { color: isActive ? '#000' : colors.mutedForeground }]}>
+              <Text style={[styles.chipText, { color: isActive ? colors.primaryForeground : colors.mutedForeground }]}>
                 {label}
               </Text>
             </TouchableOpacity>

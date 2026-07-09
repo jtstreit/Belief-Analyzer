@@ -27,15 +27,15 @@ export default function BeliefsScreen() {
     switch (type) {
       case 'catastrophizing':
       case 'awfulizing':
-        return { bg: '#F59E0B', fg: '#000000' };
+        return { bg: '#FDF0E6', fg: '#C4601A' };
       case 'global_rating':
-        return { bg: '#6366F1', fg: '#FFFFFF' };
+        return { bg: '#E8F3F7', fg: '#357A93' };
       case 'should_statements':
-        return { bg: '#14B8A6', fg: '#FFFFFF' };
+        return { bg: '#E6F5F0', fg: '#2E8A6A' };
       case 'low_frustration_tolerance':
-        return { bg: '#F43F5E', fg: '#FFFFFF' };
+        return { bg: '#FAEEEE', fg: '#B94040' };
       default:
-        return { bg: colors.accent, fg: colors.accentForeground };
+        return { bg: colors.muted, fg: colors.mutedForeground };
     }
   };
 
@@ -56,7 +56,7 @@ export default function BeliefsScreen() {
         onPress={() => router.push(`/belief/${item.id}`)}
       >
         <View style={styles.cardHeader}>
-          <View style={[styles.badge, { backgroundColor: badgeColors.bg, shadowColor: badgeColors.bg, shadowOpacity: 0.6, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 }]}>
+          <View style={[styles.badge, { backgroundColor: badgeColors.bg }]}>
             <Text style={[styles.badgeText, { color: badgeColors.fg }]}>
               {item.beliefType.replace('_', ' ')}
             </Text>
@@ -68,7 +68,7 @@ export default function BeliefsScreen() {
                 {
                   backgroundColor:
                     item.status === 'resolved'
-                      ? '#10B981'
+                      ? (colors as any).success
                       : item.status === 'challenged'
                       ? colors.primary
                       : colors.destructive,
@@ -132,7 +132,7 @@ export default function BeliefsScreen() {
           ))}
           <Animated.View 
             style={[
-              { position: 'absolute', bottom: 0, height: 3, borderRadius: 2, backgroundColor: '#F59E0B' },
+              { position: 'absolute', bottom: 0, height: 3, borderRadius: 2, backgroundColor: colors.primary },
               useAnimatedStyle(() => ({ transform: [{ translateX: indicatorX.value }], width: indicatorW.value }))
             ]} 
           />

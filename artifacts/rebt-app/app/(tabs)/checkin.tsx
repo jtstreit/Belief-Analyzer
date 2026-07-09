@@ -8,7 +8,6 @@ import { useCreateTelemetry, useAnalyzePatterns, useCreateOpenaiConversation } f
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, ZoomIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withSpring } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const MOODS = [
   { value: 'Great', icon: 'sun' },
@@ -37,11 +36,7 @@ const MoodPill = ({ m, isSelected, onPress, colors }: any) => {
   return (
     <Animated.View style={[styles.moodButtonContainer, animatedStyle]}>
       <TouchableOpacity activeOpacity={0.8} style={styles.moodButtonInner} onPress={onPress}>
-        {isSelected ? (
-          <LinearGradient colors={['#1E2540', '#141928']} style={[StyleSheet.absoluteFill, { borderRadius: 16 }]} />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card, borderRadius: 16 }]} />
-        )}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: isSelected ? colors.primary : colors.card, borderRadius: 16 }]} />
         <Feather name={m.icon as any} size={24} color={isSelected ? colors.primaryForeground : colors.mutedForeground} />
         <Text style={[styles.moodText, { color: isSelected ? colors.primaryForeground : colors.mutedForeground }]}>{m.value}</Text>
       </TouchableOpacity>

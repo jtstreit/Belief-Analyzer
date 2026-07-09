@@ -10,18 +10,17 @@ import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListTelemetry } from '@workspace/api-client-react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 
 // ─── Config maps ────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  thought_entry: { label: 'Thought', color: '#6366F1', icon: 'edit-3' },
-  mood_checkin: { label: 'Mood', color: '#F59E0B', icon: 'heart' },
-  shared_text: { label: 'Shared', color: '#10B981', icon: 'share-2' },
-  notification: { label: 'Notification', color: '#8B5CF6', icon: 'bell' },
-  app_usage: { label: 'App Usage', color: '#EC4899', icon: 'smartphone' },
-  browser: { label: 'Browser', color: '#3B82F6', icon: 'globe' },
+const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  thought_entry: { label: 'Thought',      color: '#357A93', bg: '#E8F3F7', icon: 'edit-3' },
+  mood_checkin:  { label: 'Mood',         color: '#C4601A', bg: '#FDF0E6', icon: 'heart' },
+  shared_text:   { label: 'Shared',       color: '#2E8A6A', bg: '#E6F5F0', icon: 'share-2' },
+  notification:  { label: 'Notification', color: '#6B5BA6', bg: '#F0EEFA', icon: 'bell' },
+  app_usage:     { label: 'App Usage',    color: '#A0456A', bg: '#F7E8EF', icon: 'smartphone' },
+  browser:       { label: 'Browser',      color: '#357A93', bg: '#E8F3F7', icon: 'globe' },
 };
 
 function formatTime(date: Date | string): string {
@@ -55,21 +54,17 @@ function EventCard({
   index: number;
 }) {
   const colors = useColors();
-  const cfg = TYPE_CONFIG[event.type] ?? { label: event.type, color: '#6B7194', icon: 'activity' };
+  const cfg = TYPE_CONFIG[event.type] ?? { label: event.type, color: '#7B7266', bg: '#ECEEE9', icon: 'activity' };
   const isProcessed = event.processedAt != null;
 
   return (
     <Animated.View
       entering={FadeInDown.delay(index * 40).duration(400).springify()}
-      style={[styles.card, { borderColor: colors.border, opacity: isProcessed ? 0.85 : 1 }]}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: isProcessed ? 0.9 : 1 }]}
     >
-      <LinearGradient
-        colors={['#1E2540', '#141928']}
-        style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
-      />
       <View style={styles.cardTop}>
         {/* Type badge */}
-        <View style={[styles.typeBadge, { backgroundColor: `${cfg.color}22` }]}>
+        <View style={[styles.typeBadge, { backgroundColor: cfg.bg }]}>
           <Feather name={cfg.icon as any} size={11} color={cfg.color} />
           <Text style={[styles.typeText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
@@ -103,8 +98,8 @@ function EventCard({
       <View style={styles.statusRow}>
         {isProcessed ? (
           <>
-            <Feather name="check-circle" size={12} color="#10B981" />
-            <Text style={[styles.statusText, { color: '#10B981' }]}>Processed</Text>
+            <Feather name="check-circle" size={12} color={(colors as any).success} />
+            <Text style={[styles.statusText, { color: (colors as any).success }]}>Processed</Text>
           </>
         ) : (
           <>
@@ -202,7 +197,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
-    overflow: 'hidden',
     gap: 8,
   },
   cardTop: {

@@ -55,7 +55,7 @@ function ClassicTabLayout() {
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
   const { modality } = useModality();
-  const activeColor = modality === 'rebt' ? colors.primary : colors.accent;
+  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
 
   return (
     <Tabs
@@ -73,7 +73,7 @@ function ClassicTabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,

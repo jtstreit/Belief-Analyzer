@@ -10,7 +10,6 @@ import Animated, {
   FadeInDown, useAnimatedStyle, useSharedValue,
   withRepeat, withSequence, withTiming, withSpring,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useModality, MODALITY_LABELS } from '@/contexts/ModalityContext';
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -21,7 +20,7 @@ export default function CoachScreen() {
   const router = useRouter();
   const { modality } = useModality();
 
-  const activeColor = modality === 'rebt' ? '#F59E0B' : '#6366F1';
+  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
   const modalityLabel = MODALITY_LABELS[modality];
 
   const { data: conversations, isLoading, refetch } = useListOpenaiConversations();
@@ -47,16 +46,12 @@ export default function CoachScreen() {
     return (
       <AnimatedPressable
         entering={FadeInDown.delay(index * 100).springify()}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, pressStyle]}
+        style={[styles.card, { backgroundColor: colors.card, borderColor: isRecent ? activeColor + '66' : colors.border }, pressStyle]}
         onPressIn={() => { scale.value = withSpring(0.96); }}
         onPressOut={() => { scale.value = withSpring(1); }}
         onPress={() => router.push(`/coach-session/${item.id}?modality=${modality}`)}
       >
-        <LinearGradient
-          colors={isRecent ? [activeColor, activeColor + '00'] : ['#6B7194', '#6B719400']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={styles.cardGradient}
-        />
+        <View style={[styles.cardAccent, { backgroundColor: isRecent ? activeColor : colors.muted }]} />
         <View style={styles.cardInner}>
           <View style={styles.cardIcon}>
             <Feather name="message-circle" size={24} color={isRecent ? activeColor : colors.mutedForeground} />
@@ -154,10 +149,10 @@ export default function CoachScreen() {
             disabled={createConversation.isPending}
           >
             {createConversation.isPending ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Feather name="plus" size={20} color="#000" />
+                <Feather name="plus" size={20} color="#fff" />
                 <Text style={styles.newSessionText}>New Session</Text>
               </>
             )}
@@ -185,9 +180,9 @@ const styles = StyleSheet.create({
   },
   contextText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 19, flex: 1 },
   listContent: { paddingHorizontal: 20, gap: 12 },
-  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
-  cardGradient: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 24, opacity: 0.2 },
-  cardInner: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', flexDirection: 'row' },
+  cardAccent: { width: 4, borderRadius: 4 },
+  cardInner: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 16 },
   cardIcon: { marginRight: 16 },
   cardContent: { flex: 1 },
   cardTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginBottom: 4 },
@@ -203,5 +198,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 24, paddingVertical: 16, borderRadius: 30, gap: 8, elevation: 5,
   },
-  newSessionText: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#000' },
+  newSessionText: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#fff' },
 });

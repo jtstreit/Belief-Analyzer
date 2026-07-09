@@ -77,7 +77,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { modality, setModality } = useModality();
 
-  const activeColor = modality === 'rebt' ? '#F59E0B' : '#6366F1';
+  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
 
   return (
     <ScrollView
@@ -98,7 +98,7 @@ export default function SettingsScreen() {
         <OptionCard
           modality="rebt"
           active={modality === 'rebt'}
-          activeColor="#F59E0B"
+          activeColor={colors.accent}
           colors={colors}
           onPress={() => setModality('rebt')}
         />
@@ -108,7 +108,7 @@ export default function SettingsScreen() {
         <OptionCard
           modality="cbt"
           active={modality === 'cbt'}
-          activeColor="#6366F1"
+          activeColor={(colors as any).cbt}
           colors={colors}
           onPress={() => setModality('cbt')}
         />
@@ -154,8 +154,8 @@ export default function SettingsScreen() {
       {/* Disclaimer */}
       <Animated.View entering={FadeInDown.delay(300).springify()} style={{ marginTop: 28 }}>
         <SectionHeader label="IMPORTANT DISCLAIMER" colors={colors} />
-        <View style={[styles.disclaimerCard, { backgroundColor: '#EF444422', borderColor: '#EF4444' }]}>
-          <Feather name="alert-triangle" size={16} color="#EF4444" style={{ marginTop: 2 }} />
+        <View style={[styles.disclaimerCard, { backgroundColor: colors.destructive + '12', borderColor: colors.destructive + '40' }]}>
+          <Feather name="alert-triangle" size={16} color={colors.destructive} style={{ marginTop: 2 }} />
           <Text style={[styles.disclaimerText, { color: colors.foreground }]}>
             This app is a <Text style={{ fontFamily: 'Inter_700Bold' }}>self-help tool</Text>, not
             therapy or a medical device. It cannot diagnose or treat mental health conditions.
@@ -192,12 +192,12 @@ function InfoRow({ label, rebt, cbt, colors }: { label: string; rebt: string; cb
       <Text style={[styles.infoLabel, { color: colors.foreground }]}>{label}</Text>
       <View style={styles.infoColumns}>
         <View style={styles.infoCol}>
-          <Text style={[styles.infoColLabel, { color: '#F59E0B' }]}>REBT</Text>
+          <Text style={[styles.infoColLabel, { color: colors.accent }]}>REBT</Text>
           <Text style={[styles.infoColText, { color: colors.mutedForeground }]}>{rebt}</Text>
         </View>
         <View style={[styles.infoColDivider, { backgroundColor: colors.border }]} />
         <View style={styles.infoCol}>
-          <Text style={[styles.infoColLabel, { color: '#6366F1' }]}>CBT</Text>
+          <Text style={[styles.infoColLabel, { color: (colors as any).cbt }]}>CBT</Text>
           <Text style={[styles.infoColText, { color: colors.mutedForeground }]}>{cbt}</Text>
         </View>
       </View>

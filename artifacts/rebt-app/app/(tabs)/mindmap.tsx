@@ -23,7 +23,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,11 +47,11 @@ const DISTORTION_LABELS: Record<string, string> = {
   personalization: 'Personalisation',
 };
 
-const DOMAIN_CONFIG: Record<string, { label: string; color: string }> = {
-  helpless: { label: 'Helpless', color: '#6366F1' },
-  unlovable: { label: 'Unlovable', color: '#EC4899' },
-  worthless: { label: 'Worthless', color: '#EF4444' },
-  other: { label: 'Other', color: '#6B7194' },
+const DOMAIN_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  helpless:  { label: 'Helpless',  color: '#357A93', bg: '#E8F3F7' },
+  unlovable: { label: 'Unlovable', color: '#A0456A', bg: '#F7E8EF' },
+  worthless: { label: 'Worthless', color: '#B94040', bg: '#FAEEEE' },
+  other:     { label: 'Other',     color: '#7B7266', bg: '#ECEEE9' },
 };
 
 // ─── Confidence bar ────────────────────────────────────────────────────────
@@ -66,15 +65,8 @@ function ConfidenceBar({ pct, evidenceCount }: { pct: number; evidenceCount: num
 
   return (
     <View style={styles.confRow}>
-      <View style={[styles.confTrack, { backgroundColor: colors.secondary }]}>
-        <Animated.View style={[styles.confFill, bar]}>
-          <LinearGradient
-            colors={['#F59E0B', '#6366F1']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
+      <View style={[styles.confTrack, { backgroundColor: colors.muted }]}>
+        <Animated.View style={[styles.confFill, bar, { backgroundColor: colors.primary }]} />
       </View>
       <Text style={[styles.confLabel, { color: colors.mutedForeground }]}>
         {pct}% · ×{evidenceCount}
@@ -317,12 +309,8 @@ export default function MindMapScreen() {
                 map!.automaticThoughts.slice(0, 6).map((t) => (
                   <View
                     key={t.id}
-                    style={[styles.card, { borderColor: colors.border }]}
+                    style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
                   >
-                    <LinearGradient
-                      colors={['#1E2540', '#141928']}
-                      style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
-                    />
                     <Text style={[styles.thoughtText, { color: colors.cardForeground }]}>
                       "{t.thoughtText}"
                     </Text>
@@ -370,12 +358,8 @@ export default function MindMapScreen() {
                 </Text>
               ) : (
                 <View
-                  style={[styles.card, styles.distCard, { borderColor: colors.border }]}
+                  style={[styles.card, styles.distCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 >
-                  <LinearGradient
-                    colors={['#1E2540', '#141928']}
-                    style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
-                  />
                   <View style={styles.distGrid}>
                     {distortionCounts.map(([tag, count]) => (
                       <View key={tag} style={styles.distItem}>
@@ -415,11 +399,7 @@ export default function MindMapScreen() {
                 </Text>
               ) : (
                 map!.intermediateBeliefs.map((b) => (
-                  <View key={b.id} style={[styles.card, { borderColor: colors.border }]}>
-                    <LinearGradient
-                      colors={['#1E2540', '#141928']}
-                      style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
-                    />
+                  <View key={b.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <View style={styles.beliefHeader}>
                       <View
                         style={[
@@ -456,16 +436,12 @@ export default function MindMapScreen() {
                 map!.coreSchemas.map((s) => {
                   const domainCfg = DOMAIN_CONFIG[s.domain] ?? DOMAIN_CONFIG.other!;
                   return (
-                    <View key={s.id} style={[styles.card, { borderColor: colors.border }]}>
-                      <LinearGradient
-                        colors={['#1E2540', '#141928']}
-                        style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
-                      />
+                    <View key={s.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                       <View style={styles.beliefHeader}>
                         <View
                           style={[
                             styles.categoryPill,
-                            { backgroundColor: `${domainCfg.color}33` },
+                            { backgroundColor: domainCfg.bg },
                           ]}
                         >
                           <Text

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,8 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { useCreateTelemetry, useAnalyzePatterns, useCreateOpenaiConversation } from '@workspace/api-client-react';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn, ZoomIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withSpring } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const MOODS = [
   { value: 'Great', icon: 'sun' },
@@ -15,6 +17,37 @@ const MOODS = [
   { value: 'Hard', icon: 'cloud-rain' },
   { value: 'Rough', icon: 'zap' },
 ];
+
+const MoodPill = ({ m, isSelected, onPress, colors }: any) => {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    scale.value = withSpring(isSelected ? 1.15 : 1, { damping: 12 });
+  }, [isSelected]);
+  
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    borderColor: isSelected ? colors.primary : 'transparent',
+    borderWidth: 1,
+    shadowColor: isSelected ? colors.primary : 'transparent',
+    shadowOpacity: isSelected ? 0.8 : 0,
+    shadowRadius: 12,
+    elevation: isSelected ? 6 : 0,
+  }));
+
+  return (
+    <Animated.View style={[styles.moodButtonContainer, animatedStyle]}>
+      <TouchableOpacity activeOpacity={0.8} style={styles.moodButtonInner} onPress={onPress}>
+        {isSelected ? (
+          <LinearGradient colors={['#1E2540', '#141928']} style={[StyleSheet.absoluteFill, { borderRadius: 16 }]} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card, borderRadius: 16 }]} />
+        )}
+        <Feather name={m.icon as any} size={24} color={isSelected ? colors.primaryForeground : colors.mutedForeground} />
+        <Text style={[styles.moodText, { color: isSelected ? colors.primaryForeground : colors.mutedForeground }]}>{m.value}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 export default function CheckInScreen() {
   const colors = useColors();
@@ -52,10 +85,8 @@ export default function CheckInScreen() {
           setAnalyzedBeliefs(beliefs);
           setShowModal(true);
         } else {
-          // Check-in saved, no beliefs detected
           setThought('');
           setSelectedMood(null);
-          // could show toast
         }
       } else {
         setThought('');
@@ -86,67 +117,71 @@ export default function CheckInScreen() {
     }
   };
 
+  const thoughtSlide = useSharedValue(60);
+  const thoughtOpacity = useSharedValue(0);
+  useEffect(() => {
+    if (selectedMood) {
+      thoughtSlide.value = withSpring(0, { damping: 14 });
+      thoughtOpacity.value = withTiming(1, { duration: 300 });
+    } else {
+      thoughtSlide.value = withSpring(60);
+      thoughtOpacity.value = withTiming(0);
+    }
+  }, [selectedMood]);
+  const thoughtStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: thoughtSlide.value }],
+    opacity: thoughtOpacity.value
+  }));
+
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    if (isAnalyzing) {
+      pulse.value = withRepeat(withSequence(withTiming(1.04, { duration: 800 }), withTiming(1, { duration: 800 })), -1, true);
+    } else {
+      pulse.value = withTiming(1);
+    }
+  }, [isAnalyzing]);
+  const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+
+  const modalY = useSharedValue(1000);
+  useEffect(() => {
+    if (showModal) modalY.value = withSpring(0, { damping: 15, stiffness: 100 });
+    else modalY.value = withTiming(1000);
+  }, [showModal]);
+  const modalStyle = useAnimatedStyle(() => ({ transform: [{ translateY: modalY.value }] }));
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAwareScrollViewCompat
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
       >
         <Text style={[styles.title, { color: colors.foreground }]}>Check-In</Text>
 
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.foreground }]}>How are you feeling?</Text>
           <View style={styles.moodRow}>
-            {MOODS.map((m) => {
-              const isSelected = selectedMood === m.value;
-              return (
-                <TouchableOpacity
-                  key={m.value}
-                  style={[
-                    styles.moodButton,
-                    { backgroundColor: isSelected ? colors.primary : colors.card },
-                    isSelected && { borderColor: colors.primary }
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedMood(m.value);
-                  }}
-                >
-                  <Feather
-                    name={m.icon as any}
-                    size={24}
-                    color={isSelected ? colors.primaryForeground : colors.mutedForeground}
-                  />
-                  <Text
-                    style={[
-                      styles.moodText,
-                      { color: isSelected ? colors.primaryForeground : colors.mutedForeground }
-                    ]}
-                  >
-                    {m.value}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {MOODS.map((m) => (
+              <MoodPill
+                key={m.value}
+                m={m}
+                isSelected={selectedMood === m.value}
+                colors={colors}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSelectedMood(m.value);
+                }}
+              />
+            ))}
           </View>
         </View>
 
-        <View style={styles.section}>
+        <Animated.View style={[styles.section, thoughtStyle]}>
           <Text style={[styles.label, { color: colors.foreground }]}>What's on your mind?</Text>
           <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>
             What are you telling yourself right now?
           </Text>
           <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.input,
-                color: colors.foreground,
-                borderColor: colors.border,
-              }
-            ]}
+            style={[styles.input, { backgroundColor: colors.input, color: colors.foreground, borderColor: colors.border }]}
             placeholder="Type your thoughts here..."
             placeholderTextColor={colors.mutedForeground}
             multiline
@@ -154,34 +189,28 @@ export default function CheckInScreen() {
             value={thought}
             onChangeText={setThought}
           />
-        </View>
+        </Animated.View>
 
-        <TouchableOpacity
-          style={[
-            styles.analyzeButton,
-            { backgroundColor: colors.primary, opacity: (!thought && !selectedMood) || isAnalyzing ? 0.7 : 1 }
-          ]}
-          onPress={handleAnalyze}
-          disabled={(!thought && !selectedMood) || isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <ActivityIndicator color={colors.primaryForeground} />
-          ) : (
-            <Text style={[styles.analyzeText, { color: colors.primaryForeground }]}>
-              {thought ? 'Analyze My Thoughts' : 'Save Check-In'}
-            </Text>
-          )}
-        </TouchableOpacity>
+        <Animated.View style={btnStyle}>
+          <TouchableOpacity
+            style={[styles.analyzeButton, { backgroundColor: colors.primary, opacity: (!thought && !selectedMood) || isAnalyzing ? 0.7 : 1 }]}
+            onPress={handleAnalyze}
+            disabled={(!thought && !selectedMood) || isAnalyzing}
+          >
+            {isAnalyzing ? (
+              <ActivityIndicator color={colors.primaryForeground} />
+            ) : (
+              <Text style={[styles.analyzeText, { color: colors.primaryForeground }]}>
+                {thought ? 'Analyze My Thoughts' : 'Save Check-In'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
       </KeyboardAwareScrollViewCompat>
 
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowModal(false)}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom + 20 }]}>
+      <Modal visible={showModal} transparent animationType="none" onRequestClose={() => setShowModal(false)}>
+        <Animated.View entering={FadeIn} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+          <Animated.View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom + 20 }, modalStyle]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.foreground }]}>Beliefs Detected</Text>
               <TouchableOpacity onPress={() => setShowModal(false)} style={styles.closeButton}>
@@ -193,157 +222,57 @@ export default function CheckInScreen() {
             </Text>
             
             <ScrollView style={styles.beliefsList}>
-              {analyzedBeliefs.map(belief => (
-                <View key={belief.id} style={[styles.beliefCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-                    <Text style={[styles.badgeText, { color: colors.accentForeground }]}>{belief.beliefType.replace('_', ' ')}</Text>
+              {analyzedBeliefs.map((belief, index) => (
+                <Animated.View key={belief.id} entering={ZoomIn.delay(200 + index * 100)}>
+                  <View style={[styles.beliefCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+                      <Text style={[styles.badgeText, { color: colors.accentForeground }]}>{belief.beliefType.replace('_', ' ')}</Text>
+                    </View>
+                    <Text style={[styles.beliefText, { color: colors.cardForeground }]}>
+                      {belief.beliefText}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.challengeButton, { backgroundColor: colors.primary }]}
+                      onPress={() => handleChallenge(belief.id)}
+                    >
+                      <Text style={[styles.challengeText, { color: colors.primaryForeground }]}>Challenge this belief</Text>
+                    </TouchableOpacity>
                   </View>
-                  <Text style={[styles.beliefText, { color: colors.cardForeground }]}>
-                    {belief.beliefText}
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.challengeButton, { backgroundColor: colors.primary }]}
-                    onPress={() => handleChallenge(belief.id)}
-                  >
-                    <Text style={[styles.challengeText, { color: colors.primaryForeground }]}>Challenge this belief</Text>
-                  </TouchableOpacity>
-                </View>
+                </Animated.View>
               ))}
             </ScrollView>
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    gap: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'Inter_700Bold',
-  },
-  section: {
-    gap: 12,
-  },
-  label: {
-    fontSize: 20,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  subLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    marginTop: -8,
-  },
-  moodRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  moodButton: {
-    flex: 1,
-    minWidth: 60,
-    aspectRatio: 0.8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  moodText: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-  },
-  input: {
-    minHeight: 160,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 24,
-  },
-  analyzeButton: {
-    padding: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  analyzeText: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    marginBottom: 20,
-    lineHeight: 24,
-  },
-  beliefsList: {
-    flexGrow: 0,
-  },
-  beliefCard: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 12,
-    marginBottom: 12,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'capitalize',
-  },
-  beliefText: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 24,
-  },
-  challengeButton: {
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  challengeText: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-  },
+  container: { flex: 1 },
+  scrollContent: { padding: 20, gap: 32 },
+  title: { fontSize: 32, fontFamily: 'Inter_700Bold' },
+  section: { gap: 12 },
+  label: { fontSize: 20, fontFamily: 'Inter_600SemiBold' },
+  subLabel: { fontSize: 14, fontFamily: 'Inter_400Regular', marginTop: -8 },
+  moodRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  moodButtonContainer: { flex: 1, minWidth: 60, aspectRatio: 0.8, borderRadius: 16 },
+  moodButtonInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, overflow: 'hidden' },
+  moodText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  input: { minHeight: 160, borderRadius: 16, borderWidth: 1, padding: 16, fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
+  analyzeButton: { padding: 18, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  analyzeText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  modalTitle: { fontSize: 24, fontFamily: 'Inter_700Bold' },
+  closeButton: { padding: 4 },
+  modalSubtitle: { fontSize: 16, fontFamily: 'Inter_400Regular', marginBottom: 20, lineHeight: 24 },
+  beliefsList: { flexGrow: 0 },
+  beliefCard: { padding: 16, borderRadius: 14, borderWidth: 1, gap: 12, marginBottom: 12 },
+  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  badgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textTransform: 'capitalize' },
+  beliefText: { fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
+  challengeButton: { padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 4 },
+  challengeText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 });

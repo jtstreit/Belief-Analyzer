@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGetBelief, useUpdateBelief, useCreateOpenaiConversation } from '@workspace/api-client-react';
@@ -7,6 +7,25 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import Animated, { FadeInDown, useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity);
+
+const StatusButton = ({ active, onPress, colors, icon, label }: any) => {
+  const scale = useSharedValue(1);
+  return (
+    <AnimatedPressable
+      style={[styles.outlineBtn, { borderColor: colors.border, transform: [{ scale }] }]}
+      onPressIn={() => scale.value = withSpring(0.95)}
+      onPressOut={() => scale.value = withSpring(1)}
+      onPress={onPress}
+    >
+      <Feather name={icon as any} size={16} color={colors.foreground} />
+      <Text style={[styles.outlineBtnText, { color: colors.foreground }]}>{label}</Text>
+    </AnimatedPressable>
+  );
+};
 
 export default function BeliefDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -79,8 +98,8 @@ export default function BeliefDetailScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         
-        <View style={styles.header}>
-          <View style={[styles.badge, { backgroundColor: badgeColors.bg }]}>
+        <Animated.View entering={FadeInDown.duration(600).springify()} style={styles.header}>
+          <View style={[styles.badge, { backgroundColor: badgeColors.bg, shadowColor: badgeColors.bg, shadowOpacity: 0.6, shadowRadius: 8, elevation: 4 }]}>
             <Text style={[styles.badgeText, { color: badgeColors.fg }]}>
               {belief.beliefType.replace('_', ' ')}
             </Text>
@@ -93,39 +112,46 @@ export default function BeliefDetailScreen() {
             ]} />
             <Text style={[styles.statusText, { color: colors.foreground }]}>{belief.status}</Text>
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.section}>
+        <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={[styles.section, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', paddingLeft: 16 }]}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>The Belief</Text>
           <Text style={[styles.beliefText, { color: colors.foreground }]}>{belief.beliefText}</Text>
-        </View>
+        </Animated.View>
 
         {belief.triggerSituation && (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.cardHeader}>
-              <Feather name="zap" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>Trigger Situation</Text>
+          <Animated.View entering={FadeInDown.delay(200).duration(600).springify()}>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.cardHeader}>
+                <Feather name="zap" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>Trigger Situation</Text>
+              </View>
+              <Text style={[styles.cardText, { color: colors.cardForeground }]}>{belief.triggerSituation}</Text>
             </View>
-            <Text style={[styles.cardText, { color: colors.cardForeground }]}>{belief.triggerSituation}</Text>
-          </View>
+          </Animated.View>
         )}
 
         {belief.emotionalConsequence && (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.cardHeader}>
-              <Feather name="heart" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>Emotional Consequence</Text>
+          <Animated.View entering={FadeInDown.delay(300).duration(600).springify()}>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.cardHeader}>
+                <Feather name="heart" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.cardTitle, { color: colors.mutedForeground }]}>Emotional Consequence</Text>
+              </View>
+              <Text style={[styles.cardText, { color: colors.cardForeground }]}>{belief.emotionalConsequence}</Text>
             </View>
-            <Text style={[styles.cardText, { color: colors.cardForeground }]}>{belief.emotionalConsequence}</Text>
-          </View>
+          </Animated.View>
         )}
 
-        <View style={styles.actions}>
+        <Animated.View entering={FadeInDown.delay(400).duration(600).springify()} style={styles.actions}>
           <TouchableOpacity
-            style={[styles.challengeBtn, { backgroundColor: colors.primary }]}
+            style={[styles.challengeBtn, { overflow: 'hidden' }]}
             onPress={handleChallenge}
             disabled={createConversation.isPending || updateBelief.isPending}
+            activeOpacity={0.8}
           >
+            <LinearGradient colors={['#F59E0B', '#D97706']} style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, { shadowColor: '#F59E0B', shadowOpacity: 0.5, shadowRadius: 10, elevation: 8 }]} />
             {createConversation.isPending ? (
                <ActivityIndicator color={colors.primaryForeground} />
             ) : (
@@ -140,25 +166,23 @@ export default function BeliefDetailScreen() {
 
           <View style={styles.statusActions}>
              {belief.status !== 'resolved' && (
-                <TouchableOpacity
-                  style={[styles.outlineBtn, { borderColor: colors.border }]}
-                  onPress={() => handleToggleStatus('resolved')}
-                >
-                  <Feather name="check" size={16} color={colors.foreground} />
-                  <Text style={[styles.outlineBtnText, { color: colors.foreground }]}>Mark Resolved</Text>
-                </TouchableOpacity>
+                <StatusButton 
+                  icon="check" 
+                  label="Mark Resolved" 
+                  colors={colors} 
+                  onPress={() => handleToggleStatus('resolved')} 
+                />
              )}
              {belief.status === 'resolved' && (
-                <TouchableOpacity
-                  style={[styles.outlineBtn, { borderColor: colors.border }]}
-                  onPress={() => handleToggleStatus('active')}
-                >
-                  <Feather name="refresh-ccw" size={16} color={colors.foreground} />
-                  <Text style={[styles.outlineBtnText, { color: colors.foreground }]}>Reopen</Text>
-                </TouchableOpacity>
+                <StatusButton 
+                  icon="refresh-ccw" 
+                  label="Reopen" 
+                  colors={colors} 
+                  onPress={() => handleToggleStatus('active')} 
+                />
              )}
           </View>
-        </View>
+        </Animated.View>
 
       </KeyboardAwareScrollViewCompat>
     </View>
@@ -166,118 +190,26 @@ export default function BeliefDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
-    padding: 20,
-    gap: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  badgeText: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    textTransform: 'capitalize',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 8,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    textTransform: 'capitalize',
-  },
-  section: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  beliefText: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-    lineHeight: 32,
-  },
-  card: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 8,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  cardText: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 24,
-  },
-  actions: {
-    marginTop: 16,
-    gap: 16,
-  },
-  challengeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 14,
-    gap: 8,
-  },
-  challengeBtnText: {
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  statusActions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  outlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 8,
-  },
-  outlineBtnText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-  },
+  container: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  content: { padding: 20, gap: 24, paddingTop: 32 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  badgeText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', textTransform: 'capitalize' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, gap: 8 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 12, fontFamily: 'Inter_500Medium', textTransform: 'capitalize' },
+  section: { gap: 8 },
+  label: { fontSize: 14, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 1 },
+  beliefText: { fontSize: 24, fontFamily: 'Inter_700Bold', lineHeight: 32 },
+  card: { padding: 16, borderRadius: 14, borderWidth: 1, gap: 8 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  cardText: { fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
+  actions: { marginTop: 16, gap: 16 },
+  challengeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 14, gap: 8 },
+  challengeBtnText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  statusActions: { flexDirection: 'row', justifyContent: 'center' },
+  outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, gap: 8 },
+  outlineBtnText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
 });

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGetOpenaiConversation } from '@workspace/api-client-react';
@@ -8,6 +8,24 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { fetch as expoFetch } from 'expo/fetch';
 import { KeyboardAvoidingView as KeyboardControllerView } from 'react-native-keyboard-controller';
+import Animated, { FadeIn, SlideInDown, SlideInUp, ZoomIn, ZoomOut, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+
+const TypingDot = ({ delay }: { delay: number }) => {
+  const translateY = useSharedValue(0);
+  useEffect(() => {
+    translateY.value = withDelay(delay, withRepeat(withSequence(withTiming(-8, { duration: 300 }), withTiming(0, { duration: 300 })), -1, true));
+  }, []);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+  return <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#6B7194', marginHorizontal: 3 }, style]} />;
+};
+
+const TypingIndicator = () => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', height: 24, paddingHorizontal: 4 }}>
+    <TypingDot delay={0} />
+    <TypingDot delay={150} />
+    <TypingDot delay={300} />
+  </View>
+);
 
 export default function CoachSessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,6 +38,7 @@ export default function CoachSessionScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState('');
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const { data: conversation, isLoading } = useGetOpenaiConversation(convId);
   const flatListRef = useRef<FlatList>(null);
@@ -116,15 +135,24 @@ export default function CoachSessionScreen() {
   const renderMessage = ({ item }: { item: any }) => {
     const isUser = item.role === 'user';
     return (
-      <View style={[
-        styles.messageContainer,
-        isUser ? styles.messageUser : styles.messageAssistant,
-      ]}>
+      <Animated.View 
+        entering={isUser ? SlideInDown.springify().damping(16) : SlideInUp.springify().damping(16)}
+        style={[styles.messageContainer, isUser ? styles.messageUser : styles.messageAssistant]}
+      >
         <View style={[
           styles.messageBubble,
           isUser 
             ? { backgroundColor: colors.primary }
-            : { backgroundColor: colors.card, borderLeftWidth: 4, borderLeftColor: colors.accent }
+            : { 
+                backgroundColor: colors.card, 
+                borderLeftWidth: 4, 
+                borderLeftColor: colors.accent,
+                shadowColor: colors.accent,
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                shadowOffset: { width: -2, height: 0 },
+                elevation: 4
+              }
         ]}>
           <Text style={[
             styles.messageText,
@@ -133,12 +161,28 @@ export default function CoachSessionScreen() {
             {renderBoldText(item.content)}
           </Text>
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
-  // Inverted order for FlatList
   const reversedMessages = [...messages].reverse();
+
+  const glowOpacity = useSharedValue(0);
+  useEffect(() => {
+    glowOpacity.value = withTiming(isInputFocused ? 1 : 0, { duration: 300 });
+  }, [isInputFocused]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    position: 'absolute',
+    top: -1, left: 0, right: 0, height: 2,
+    backgroundColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 8,
+  }));
 
   if (isLoading) {
     return (
@@ -152,7 +196,7 @@ export default function CoachSessionScreen() {
     <KeyboardControllerView 
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior="padding"
-      keyboardVerticalOffset={0} // Header is transparent/handled by stack
+      keyboardVerticalOffset={0}
     >
       <FlatList
         ref={flatListRef}
@@ -163,18 +207,31 @@ export default function CoachSessionScreen() {
         contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
         ListHeaderComponent={
           isStreaming ? (
-            <View style={[styles.messageContainer, styles.messageAssistant]}>
+            <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.messageContainer, styles.messageAssistant]}>
               <View style={[
                 styles.messageBubble,
-                { backgroundColor: colors.card, borderLeftWidth: 4, borderLeftColor: colors.accent }
+                { 
+                  backgroundColor: colors.card, 
+                  borderLeftWidth: 4, 
+                  borderLeftColor: colors.accent,
+                  shadowColor: colors.accent,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  shadowOffset: { width: -2, height: 0 },
+                  elevation: 4
+                }
               ]}>
-                <Text style={[styles.messageText, { color: colors.cardForeground }]}>
-                  {streamedContent ? renderBoldText(streamedContent) : (
-                    <Text style={{ opacity: 0.5 }}>Typing...</Text>
-                  )}
-                </Text>
+                {streamedContent ? (
+                  <Animated.View entering={FadeIn.duration(300)}>
+                    <Text style={[styles.messageText, { color: colors.cardForeground }]}>
+                      {renderBoldText(streamedContent)}
+                    </Text>
+                  </Animated.View>
+                ) : (
+                  <TypingIndicator />
+                )}
               </View>
-            </View>
+            </Animated.View>
           ) : null
         }
       />
@@ -183,90 +240,48 @@ export default function CoachSessionScreen() {
         styles.inputContainer,
         { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom || 16 }
       ]}>
+        <Animated.View style={glowStyle} />
         <TextInput
           style={[styles.input, { backgroundColor: colors.input, color: colors.foreground }]}
           value={inputText}
           onChangeText={setInputText}
+          onFocus={() => setIsInputFocused(true)}
+          onBlur={() => setIsInputFocused(false)}
           placeholder="Message coach..."
           placeholderTextColor={colors.mutedForeground}
           multiline
           maxLength={1000}
         />
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            { backgroundColor: inputText.trim() && !isStreaming ? colors.primary : colors.muted }
-          ]}
-          onPress={handleSendBetter}
-          disabled={!inputText.trim() || isStreaming}
-        >
-          <Feather name="send" size={18} color={inputText.trim() && !isStreaming ? colors.primaryForeground : colors.mutedForeground} />
-        </TouchableOpacity>
+        
+        <View style={styles.sendButtonWrapper}>
+          {inputText.trim() && !isStreaming ? (
+            <Animated.View entering={ZoomIn.springify().damping(14)} exiting={ZoomOut.duration(200)}>
+              <TouchableOpacity
+                style={[styles.sendButton, { backgroundColor: colors.primary }]}
+                onPress={handleSendBetter}
+              >
+                <Feather name="send" size={18} color={colors.primaryForeground} />
+              </TouchableOpacity>
+            </Animated.View>
+          ) : null}
+        </View>
+
       </View>
     </KeyboardControllerView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 16,
-  },
-  messageContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  messageUser: {
-    justifyContent: 'flex-end',
-  },
-  messageAssistant: {
-    justifyContent: 'flex-start',
-  },
-  messageBubble: {
-    maxWidth: '85%',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-  },
-  messageText: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 24,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  listContent: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
+  messageContainer: { width: '100%', flexDirection: 'row', marginBottom: 16 },
+  messageUser: { justifyContent: 'flex-end' },
+  messageAssistant: { justifyContent: 'flex-start' },
+  messageBubble: { maxWidth: '85%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20 },
+  messageText: { fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
+  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, gap: 12 },
+  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 16, fontFamily: 'Inter_400Regular' },
+  sendButtonWrapper: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', paddingBottom: 4 },
+  sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

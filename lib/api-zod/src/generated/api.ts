@@ -431,6 +431,34 @@ export const SendOpenaiMessageResponse = zod.unknown()
 
 
 /**
+ * @summary Get aggregated progress stats — mood trend, exercise counts, belief funnel, streaks
+ */
+export const GetProgressResponse = zod.object({
+  "moodTrend": zod.array(zod.object({
+  "date": zod.string(),
+  "avgBefore": zod.number(),
+  "avgAfter": zod.number()
+})),
+  "exercisesByModality": zod.array(zod.object({
+  "modality": zod.string(),
+  "count": zod.number()
+})),
+  "exercisesByType": zod.array(zod.object({
+  "exerciseId": zod.string(),
+  "count": zod.number()
+})),
+  "beliefFunnel": zod.object({
+  "active": zod.number(),
+  "challenged": zod.number(),
+  "resolved": zod.number()
+}),
+  "currentStreak": zod.number(),
+  "longestStreak": zod.number(),
+  "totalCompleted": zod.number()
+})
+
+
+/**
  * @summary List exercise sessions
  */
 export const ListExerciseSessionsQueryParams = zod.object({

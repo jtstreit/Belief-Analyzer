@@ -36,6 +36,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
         <Label>Coach</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="progress">
+        <Icon sf={{ default: 'chart.line.uptrend.xyaxis', selected: 'chart.line.uptrend.xyaxis' }} />
+        <Label>Progress</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: 'gear', selected: 'gear' }} />
         <Label>Settings</Label>
@@ -145,6 +149,18 @@ function ClassicTabLayout() {
               <SymbolView name="bubble.left.and.bubble.right" tintColor={color} size={22} />
             ) : (
               <Feather name="message-circle" size={20} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: 'Progress',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.line.uptrend.xyaxis" tintColor={color} size={22} />
+            ) : (
+              <Feather name="trending-up" size={20} color={color} />
             ),
         }}
       />

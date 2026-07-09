@@ -423,6 +423,19 @@ paths:
           content:
             text/event-stream: {}
 
+  /progress:
+    get:
+      operationId: getProgress
+      tags: [patterns]
+      summary: Get aggregated progress stats — mood trend, exercise counts, belief funnel, streaks
+      responses:
+        "200":
+          description: Progress summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgressSummary"
+
   /exercise-sessions:
     get:
       operationId: listExerciseSessions
@@ -789,6 +802,88 @@ components:
       required:
         - beliefType
         - count
+
+    MoodTrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        avgBefore:
+          type: number
+        avgAfter:
+          type: number
+      required:
+        - date
+        - avgBefore
+        - avgAfter
+
+    ExerciseModalityCount:
+      type: object
+      properties:
+        modality:
+          type: string
+        count:
+          type: integer
+      required:
+        - modality
+        - count
+
+    ExerciseTypeCount:
+      type: object
+      properties:
+        exerciseId:
+          type: string
+        count:
+          type: integer
+      required:
+        - exerciseId
+        - count
+
+    BeliefFunnel:
+      type: object
+      properties:
+        active:
+          type: integer
+        challenged:
+          type: integer
+        resolved:
+          type: integer
+      required:
+        - active
+        - challenged
+        - resolved
+
+    ProgressSummary:
+      type: object
+      properties:
+        moodTrend:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoodTrendPoint"
+        exercisesByModality:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExerciseModalityCount"
+        exercisesByType:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExerciseTypeCount"
+        beliefFunnel:
+          $ref: "#/components/schemas/BeliefFunnel"
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        totalCompleted:
+          type: integer
+      required:
+        - moodTrend
+        - exercisesByModality
+        - exercisesByType
+        - beliefFunnel
+        - currentStreak
+        - longestStreak
+        - totalCompleted
 
     ApiError:
       type: object

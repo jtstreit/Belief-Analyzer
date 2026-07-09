@@ -125,6 +125,38 @@ export interface PatternSummary {
   lastAnalyzedAt?: string | null;
 }
 
+export interface MoodTrendPoint {
+  date: string;
+  avgBefore: number;
+  avgAfter: number;
+}
+
+export interface ExerciseModalityCount {
+  modality: string;
+  count: number;
+}
+
+export interface ExerciseTypeCount {
+  exerciseId: string;
+  count: number;
+}
+
+export interface BeliefFunnel {
+  active: number;
+  challenged: number;
+  resolved: number;
+}
+
+export interface ProgressSummary {
+  moodTrend: MoodTrendPoint[];
+  exercisesByModality: ExerciseModalityCount[];
+  exercisesByType: ExerciseTypeCount[];
+  beliefFunnel: BeliefFunnel;
+  currentStreak: number;
+  longestStreak: number;
+  totalCompleted: number;
+}
+
 export interface ApiError {
   error: string;
 }

@@ -42,6 +42,7 @@ import type {
   OpenaiMessage,
   OpenaiMessageInput,
   PatternSummary,
+  ProgressSummary,
   TelemetryBatchInput,
   TelemetryEvent,
   TelemetryEventInput
@@ -1661,6 +1662,83 @@ export const useSendOpenaiMessage = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSendOpenaiMessageMutationOptions(options));
     }
+
+export const getGetProgressUrl = () => {
+
+
+
+
+  return `/api/progress`
+}
+
+/**
+ * @summary Get aggregated progress stats — mood trend, exercise counts, belief funnel, streaks
+ */
+export const getProgress = async ( options?: RequestInit): Promise<ProgressSummary> => {
+
+  return customFetch<ProgressSummary>(getGetProgressUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProgressQueryKey = () => {
+    return [
+    `/api/progress`
+    ] as const;
+    }
+
+
+export const getGetProgressQueryOptions = <TData = Awaited<ReturnType<typeof getProgress>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProgressQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProgress>>> = ({ signal }) => getProgress({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProgress>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProgressQueryResult = NonNullable<Awaited<ReturnType<typeof getProgress>>>
+export type GetProgressQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get aggregated progress stats — mood trend, exercise counts, belief funnel, streaks
+ */
+
+export function useGetProgress<TData = Awaited<ReturnType<typeof getProgress>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProgress>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProgressQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListExerciseSessionsUrl = (params?: ListExerciseSessionsParams,) => {
   const normalizedParams = new URLSearchParams();

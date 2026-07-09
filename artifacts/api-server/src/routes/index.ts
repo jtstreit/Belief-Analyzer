@@ -6,6 +6,7 @@ import patternsRouter from "./patterns";
 import cognitiveRouter from "./cognitive";
 import openaiRouter from "./openai/index";
 import exercisesRouter from "./exercises";
+import progressRouter from "./progress";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(patternsRouter);
 router.use(cognitiveRouter);
 router.use(openaiRouter);
 router.use(exercisesRouter);
+router.use(progressRouter);
 
 export default router;

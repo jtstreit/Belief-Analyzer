@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: REBT Companion API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: telemetry
+    description: Phone telemetry and check-in events
+  - name: beliefs
+    description: Identified irrational beliefs
+  - name: patterns
+    description: Pattern analysis from telemetry
+  - name: openai
+    description: OpenAI AI chat operations
 paths:
   /healthz:
     get:
@@ -24,6 +32,290 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /telemetry:
+    get:
+      operationId: listTelemetry
+      tags: [telemetry]
+      summary: List recent telemetry events
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: type
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of telemetry events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TelemetryEvent"
+    post:
+      operationId: createTelemetry
+      tags: [telemetry]
+      summary: Log a telemetry event (mood check-in, thought entry, app usage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryEventInput"
+      responses:
+        "201":
+          description: Created telemetry event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryEvent"
+
+  /beliefs:
+    get:
+      operationId: listBeliefs
+      tags: [beliefs]
+      summary: List identified irrational beliefs
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: beliefType
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of beliefs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Belief"
+    post:
+      operationId: createBelief
+      tags: [beliefs]
+      summary: Create a new identified irrational belief
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BeliefInput"
+      responses:
+        "201":
+          description: Created belief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Belief"
+
+  /beliefs/{id}:
+    get:
+      operationId: getBelief
+      tags: [beliefs]
+      summary: Get a specific belief
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Belief detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Belief"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      operationId: updateBelief
+      tags: [beliefs]
+      summary: Update a belief status or link to conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BeliefUpdate"
+      responses:
+        "200":
+          description: Updated belief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Belief"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /patterns:
+    get:
+      operationId: getPatterns
+      tags: [patterns]
+      summary: Get aggregated belief pattern summary
+      responses:
+        "200":
+          description: Pattern analysis summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatternSummary"
+
+  /patterns/analyze:
+    post:
+      operationId: analyzePatterns
+      tags: [patterns]
+      summary: Trigger LLM analysis of recent telemetry to detect belief patterns
+      responses:
+        "200":
+          description: Detected beliefs from telemetry
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Belief"
+
+  /openai/conversations:
+    get:
+      operationId: listOpenaiConversations
+      tags: [openai]
+      summary: List all REBT coaching conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiConversation"
+    post:
+      operationId: createOpenaiConversation
+      tags: [openai]
+      summary: Start a new REBT coaching conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversation"
+
+  /openai/conversations/{id}:
+    get:
+      operationId: getOpenaiConversation
+      tags: [openai]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteOpenaiConversation
+      tags: [openai]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /openai/conversations/{id}/messages:
+    get:
+      operationId: listOpenaiMessages
+      tags: [openai]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiMessage"
+    post:
+      operationId: sendOpenaiMessage
+      tags: [openai]
+      summary: Send a message and receive a streaming REBT coaching response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant text chunks
+          content:
+            text/event-stream: {}
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +326,215 @@ components:
       required:
         - status
 
+    TelemetryEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        mood:
+          type: ["string", "null"]
+        thoughtText:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - createdAt
+
+    TelemetryEventInput:
+      type: object
+      properties:
+        type:
+          type: string
+        mood:
+          type: string
+        thoughtText:
+          type: string
+      required:
+        - type
+
+    Belief:
+      type: object
+      properties:
+        id:
+          type: integer
+        beliefText:
+          type: string
+        beliefType:
+          type: string
+        triggerSituation:
+          type: ["string", "null"]
+        emotionalConsequence:
+          type: ["string", "null"]
+        status:
+          type: string
+        conversationId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - beliefText
+        - beliefType
+        - status
+        - createdAt
+        - updatedAt
+
+    BeliefInput:
+      type: object
+      properties:
+        beliefText:
+          type: string
+        beliefType:
+          type: string
+        triggerSituation:
+          type: string
+        emotionalConsequence:
+          type: string
+        status:
+          type: string
+        conversationId:
+          type: integer
+      required:
+        - beliefText
+        - beliefType
+
+    BeliefUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        conversationId:
+          type: integer
+        beliefText:
+          type: string
+        triggerSituation:
+          type: string
+        emotionalConsequence:
+          type: string
+
+    PatternSummary:
+      type: object
+      properties:
+        totalBeliefs:
+          type: integer
+        activeBeliefs:
+          type: integer
+        resolvedBeliefs:
+          type: integer
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/BeliefTypeCount"
+        recentStreak:
+          type: integer
+        lastAnalyzedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - totalBeliefs
+        - activeBeliefs
+        - resolvedBeliefs
+        - byType
+        - recentStreak
+
+    BeliefTypeCount:
+      type: object
+      properties:
+        beliefType:
+          type: string
+        count:
+          type: integer
+      required:
+        - beliefType
+        - count
+
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    OpenaiConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - createdAt
+
+    OpenaiMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    OpenaiConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+        beliefId:
+          type: integer
+      required:
+        - title
+
+    OpenaiMessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+    OpenaiConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenaiMessage"
+      required:
+        - id
+        - title
+        - createdAt
+        - messages

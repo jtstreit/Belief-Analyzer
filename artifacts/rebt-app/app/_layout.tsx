@@ -13,6 +13,11 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { setBaseUrl } from '@workspace/api-client-react';
+import { useColors } from '@/hooks/useColors';
+
+// Set base URL for API client
+setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -20,9 +25,28 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const colors = useColors();
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="belief/[id]"
+        options={{
+          headerShown: true,
+          title: 'Belief Detail',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+        }}
+      />
+      <Stack.Screen
+        name="coach-session/[id]"
+        options={{
+          headerShown: true,
+          title: 'REBT Coach',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+        }}
+      />
     </Stack>
   );
 }

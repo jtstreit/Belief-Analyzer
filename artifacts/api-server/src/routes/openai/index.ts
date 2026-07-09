@@ -275,7 +275,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
 
     let fullResponse = "";
     const stream = await openai.chat.completions.create({
-      model: "deepseek-chat",
+      model: "deepseek-ai/DeepSeek-V4-Pro",
       max_completion_tokens: 1024,
       messages: [
         { role: "system", content: systemPromptWithMemory },

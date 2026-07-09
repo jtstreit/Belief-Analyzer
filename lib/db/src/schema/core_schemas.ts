@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -25,6 +25,7 @@ export const coreSchemasTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    uniqueIndex("core_schema_text_unique_idx").on(table.schemaText),
     index("core_schema_domain_idx").on(table.domain),
     index("core_schema_confidence_idx").on(table.confidence),
   ],

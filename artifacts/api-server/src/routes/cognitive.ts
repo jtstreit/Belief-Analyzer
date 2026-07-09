@@ -6,7 +6,7 @@ import {
   intermediateBeliefsCogTable,
   coreSchemasTable,
 } from "@workspace/db";
-import { isNull, inArray, desc, eq } from "drizzle-orm";
+import { isNull, inArray, desc, eq, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
@@ -313,12 +313,25 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
               .where(eq(intermediateBeliefsCogTable.id, existing.id));
           }
         } else {
-          await db.insert(intermediateBeliefsCogTable).values({
-            beliefText: b.beliefText,
-            category: b.category ?? "rule",
-            confidence: b.initialConfidence ?? 20,
-            evidenceCount: 1,
-          });
+          // Use onConflictDoUpdate so an exact-duplicate beliefText (caught by
+          // the unique index) accumulates evidence rather than failing silently
+          // or crashing the analysis run.
+          await db
+            .insert(intermediateBeliefsCogTable)
+            .values({
+              beliefText: b.beliefText,
+              category: b.category ?? "rule",
+              confidence: b.initialConfidence ?? 20,
+              evidenceCount: 1,
+            })
+            .onConflictDoUpdate({
+              target: intermediateBeliefsCogTable.beliefText,
+              set: {
+                evidenceCount: sql`${intermediateBeliefsCogTable.evidenceCount} + 1`,
+                confidence: sql`LEAST(95, ${intermediateBeliefsCogTable.confidence} + 10)`,
+                updatedAt: new Date(),
+              },
+            });
         }
       }
     }
@@ -389,12 +402,24 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
               .where(eq(coreSchemasTable.id, existing.id));
           }
         } else {
-          await db.insert(coreSchemasTable).values({
-            schemaText: s.schemaText,
-            domain: s.domain,
-            confidence: s.initialConfidence ?? 15,
-            evidenceCount: 1,
-          });
+          // Same conflict-safe upsert as Pass 2 — unique index on schemaText
+          // catches duplicates the LLM mis-labels as new.
+          await db
+            .insert(coreSchemasTable)
+            .values({
+              schemaText: s.schemaText,
+              domain: s.domain,
+              confidence: s.initialConfidence ?? 15,
+              evidenceCount: 1,
+            })
+            .onConflictDoUpdate({
+              target: coreSchemasTable.schemaText,
+              set: {
+                evidenceCount: sql`${coreSchemasTable.evidenceCount} + 1`,
+                confidence: sql`LEAST(95, ${coreSchemasTable.confidence} + 10)`,
+                updatedAt: new Date(),
+              },
+            });
         }
       }
     }

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,6 +29,7 @@ export const intermediateBeliefsCogTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    uniqueIndex("int_belief_text_unique_idx").on(table.beliefText),
     index("int_belief_confidence_idx").on(table.confidence),
   ],
 );

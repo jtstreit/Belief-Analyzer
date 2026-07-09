@@ -1,6 +1,7 @@
-import { pgTable, serial, text, integer, jsonb, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, jsonb, timestamp, index, foreignKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { telemetryEventsTable } from "./telemetry_events";
 
 /**
  * Automatic thoughts extracted from telemetry events — Layer 1 of the
@@ -10,6 +11,9 @@ import { z } from "zod/v4";
  *   all_or_nothing | overgeneralization | mental_filter | discounting_positive |
  *   mind_reading | fortune_telling | magnification | minimization |
  *   emotional_reasoning | should_statements | labeling | personalization
+ *
+ * telemetryEventId has a FK to telemetry_events with ON DELETE SET NULL so
+ * deleting a source event leaves the extracted thought intact but unlinked.
  */
 export const automaticThoughtsTable = pgTable(
   "automatic_thoughts",
@@ -26,6 +30,11 @@ export const automaticThoughtsTable = pgTable(
   (table) => [
     index("auto_thought_created_idx").on(table.createdAt),
     index("auto_thought_telemetry_idx").on(table.telemetryEventId),
+    foreignKey({
+      columns: [table.telemetryEventId],
+      foreignColumns: [telemetryEventsTable.id],
+      name: "auto_thought_telemetry_fk",
+    }).onDelete("set null"),
   ],
 );
 

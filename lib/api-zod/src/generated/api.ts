@@ -340,7 +340,7 @@ export const ListCoreSchemasResponse = zod.array(ListCoreSchemasResponseItem)
 
 
 /**
- * @summary List all REBT coaching conversations
+ * @summary List all coaching conversations
  */
 export const ListOpenaiConversationsResponseItem = zod.object({
   "id": zod.number(),
@@ -351,11 +351,12 @@ export const ListOpenaiConversationsResponse = zod.array(ListOpenaiConversations
 
 
 /**
- * @summary Start a new REBT coaching conversation
+ * @summary Start a new coaching conversation
  */
 export const CreateOpenaiConversationBody = zod.object({
   "title": zod.string(),
-  "beliefId": zod.number().optional()
+  "beliefId": zod.number().optional(),
+  "modality": zod.string().optional().describe('rebt or cbt — determines coach framework')
 })
 
 export const CreateOpenaiConversationResponse = zod.object({
@@ -414,16 +415,125 @@ export const ListOpenaiMessagesResponse = zod.array(ListOpenaiMessagesResponseIt
 
 
 /**
- * @summary Send a message and receive a streaming REBT coaching response
+ * @summary Send a message and receive a streaming coaching response
  */
 export const SendOpenaiMessageParams = zod.object({
   "id": zod.coerce.number()
 })
 
 export const SendOpenaiMessageBody = zod.object({
-  "content": zod.string()
+  "content": zod.string(),
+  "modality": zod.string().optional().describe('rebt or cbt — selects coach system prompt'),
+  "exerciseContext": zod.string().optional().describe('Optional context from a completed exercise to anchor the coaching')
 })
 
 export const SendOpenaiMessageResponse = zod.unknown()
+
+
+/**
+ * @summary List exercise sessions
+ */
+export const ListExerciseSessionsQueryParams = zod.object({
+  "exerciseId": zod.coerce.string().optional(),
+  "modality": zod.coerce.string().optional(),
+  "completed": zod.coerce.boolean().optional()
+})
+
+export const ListExerciseSessionsResponseItem = zod.object({
+  "id": zod.number(),
+  "exerciseId": zod.string(),
+  "modality": zod.string(),
+  "stepData": zod.unknown().optional().describe('Keyed responses for each exercise step'),
+  "moodBefore": zod.number().nullish(),
+  "moodAfter": zod.number().nullish(),
+  "sudsRating": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "completed": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListExerciseSessionsResponse = zod.array(ListExerciseSessionsResponseItem)
+
+
+/**
+ * @summary Create a new exercise session
+ */
+export const CreateExerciseSessionBody = zod.object({
+  "exerciseId": zod.string(),
+  "modality": zod.string(),
+  "stepData": zod.unknown().optional(),
+  "moodBefore": zod.number().optional(),
+  "moodAfter": zod.number().optional(),
+  "sudsRating": zod.number().optional(),
+  "notes": zod.string().optional(),
+  "completed": zod.boolean().optional()
+})
+
+export const CreateExerciseSessionResponse = zod.object({
+  "id": zod.number(),
+  "exerciseId": zod.string(),
+  "modality": zod.string(),
+  "stepData": zod.unknown().optional().describe('Keyed responses for each exercise step'),
+  "moodBefore": zod.number().nullish(),
+  "moodAfter": zod.number().nullish(),
+  "sudsRating": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "completed": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a specific exercise session
+ */
+export const GetExerciseSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetExerciseSessionResponse = zod.object({
+  "id": zod.number(),
+  "exerciseId": zod.string(),
+  "modality": zod.string(),
+  "stepData": zod.unknown().optional().describe('Keyed responses for each exercise step'),
+  "moodBefore": zod.number().nullish(),
+  "moodAfter": zod.number().nullish(),
+  "sudsRating": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "completed": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an exercise session (save progress or complete)
+ */
+export const UpdateExerciseSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateExerciseSessionBody = zod.object({
+  "stepData": zod.unknown().optional(),
+  "moodBefore": zod.number().optional(),
+  "moodAfter": zod.number().optional(),
+  "sudsRating": zod.number().optional(),
+  "notes": zod.string().optional(),
+  "completed": zod.boolean().optional()
+})
+
+export const UpdateExerciseSessionResponse = zod.object({
+  "id": zod.number(),
+  "exerciseId": zod.string(),
+  "modality": zod.string(),
+  "stepData": zod.unknown().optional().describe('Keyed responses for each exercise step'),
+  "moodBefore": zod.number().nullish(),
+  "moodAfter": zod.number().nullish(),
+  "sudsRating": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "completed": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
 
 

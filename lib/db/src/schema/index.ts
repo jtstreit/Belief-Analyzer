@@ -5,3 +5,4 @@ export * from "./messages";
 export * from "./automatic_thoughts";
 export * from "./intermediate_beliefs";
 export * from "./core_schemas";
+export * from "./exercise_sessions";

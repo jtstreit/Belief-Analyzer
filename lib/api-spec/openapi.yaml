@@ -20,6 +20,8 @@ tags:
     description: Layered cognitive conceptualization engine (automatic thoughts → intermediate beliefs → core schemas)
   - name: openai
     description: OpenAI AI chat operations
+  - name: exercises
+    description: Exercise session logging
 paths:
   /healthz:
     get:
@@ -307,7 +309,7 @@ paths:
     get:
       operationId: listOpenaiConversations
       tags: [openai]
-      summary: List all REBT coaching conversations
+      summary: List all coaching conversations
       responses:
         "200":
           description: List of conversations
@@ -320,7 +322,7 @@ paths:
     post:
       operationId: createOpenaiConversation
       tags: [openai]
-      summary: Start a new REBT coaching conversation
+      summary: Start a new coaching conversation
       requestBody:
         required: true
         content:
@@ -402,7 +404,7 @@ paths:
     post:
       operationId: sendOpenaiMessage
       tags: [openai]
-      summary: Send a message and receive a streaming REBT coaching response
+      summary: Send a message and receive a streaming coaching response
       parameters:
         - name: id
           in: path
@@ -420,6 +422,105 @@ paths:
           description: SSE stream of assistant text chunks
           content:
             text/event-stream: {}
+
+  /exercise-sessions:
+    get:
+      operationId: listExerciseSessions
+      tags: [exercises]
+      summary: List exercise sessions
+      parameters:
+        - name: exerciseId
+          in: query
+          schema:
+            type: string
+        - name: modality
+          in: query
+          schema:
+            type: string
+        - name: completed
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of exercise sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExerciseSession"
+    post:
+      operationId: createExerciseSession
+      tags: [exercises]
+      summary: Create a new exercise session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExerciseSessionInput"
+      responses:
+        "201":
+          description: Created exercise session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExerciseSession"
+
+  /exercise-sessions/{id}:
+    get:
+      operationId: getExerciseSession
+      tags: [exercises]
+      summary: Get a specific exercise session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Exercise session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExerciseSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      operationId: updateExerciseSession
+      tags: [exercises]
+      summary: Update an exercise session (save progress or complete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExerciseSessionUpdate"
+      responses:
+        "200":
+          description: Updated exercise session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExerciseSession"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
 components:
   schemas:
@@ -740,6 +841,9 @@ components:
           type: string
         beliefId:
           type: integer
+        modality:
+          type: string
+          description: "rebt or cbt — determines coach framework"
       required:
         - title
 
@@ -748,6 +852,12 @@ components:
       properties:
         content:
           type: string
+        modality:
+          type: string
+          description: "rebt or cbt — selects coach system prompt"
+        exerciseContext:
+          type: string
+          description: "Optional context from a completed exercise to anchor the coaching"
       required:
         - content
 
@@ -770,3 +880,75 @@ components:
         - title
         - createdAt
         - messages
+
+    ExerciseSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        exerciseId:
+          type: string
+        modality:
+          type: string
+        stepData:
+          description: "Keyed responses for each exercise step"
+        moodBefore:
+          type: ["integer", "null"]
+        moodAfter:
+          type: ["integer", "null"]
+        sudsRating:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+        completed:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - exerciseId
+        - modality
+        - completed
+        - createdAt
+        - updatedAt
+
+    ExerciseSessionInput:
+      type: object
+      properties:
+        exerciseId:
+          type: string
+        modality:
+          type: string
+        stepData: {}
+        moodBefore:
+          type: integer
+        moodAfter:
+          type: integer
+        sudsRating:
+          type: integer
+        notes:
+          type: string
+        completed:
+          type: boolean
+      required:
+        - exerciseId
+        - modality
+
+    ExerciseSessionUpdate:
+      type: object
+      properties:
+        stepData: {}
+        moodBefore:
+          type: integer
+        moodAfter:
+          type: integer
+        sudsRating:
+          type: integer
+        notes:
+          type: string
+        completed:
+          type: boolean

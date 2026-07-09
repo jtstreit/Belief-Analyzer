@@ -15,6 +15,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { setBaseUrl } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { ModalityProvider } from '@/contexts/ModalityContext';
 
 // Set base URL for API client
 setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
@@ -42,7 +43,7 @@ function RootLayoutNav() {
         name="coach-session/[id]"
         options={{
           headerShown: true,
-          title: 'REBT Coach',
+          title: 'Vera — Coach',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
         }}
@@ -55,6 +56,12 @@ function RootLayoutNav() {
           presentation: 'modal',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
+        }}
+      />
+      <Stack.Screen
+        name="exercise/[exerciseId]"
+        options={{
+          headerShown: false,
         }}
       />
     </Stack>
@@ -81,11 +88,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView>
-            <KeyboardProvider>
-              <RootLayoutNav />
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <ModalityProvider>
+            <GestureHandlerRootView>
+              <KeyboardProvider>
+                <RootLayoutNav />
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </ModalityProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

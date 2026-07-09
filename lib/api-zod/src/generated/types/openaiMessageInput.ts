@@ -8,4 +8,8 @@
 
 export interface OpenaiMessageInput {
   content: string;
+  /** rebt or cbt — selects coach system prompt */
+  modality?: string;
+  /** Optional context from a completed exercise to anchor the coaching */
+  exerciseContext?: string;
 }

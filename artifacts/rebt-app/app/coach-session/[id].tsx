@@ -8,12 +8,19 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { fetch as expoFetch } from 'expo/fetch';
 import { KeyboardAvoidingView as KeyboardControllerView } from 'react-native-keyboard-controller';
-import Animated, { FadeIn, SlideInDown, SlideInUp, ZoomIn, ZoomOut, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, {
+  FadeIn, SlideInDown, SlideInUp, ZoomIn, ZoomOut,
+  useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
+} from 'react-native-reanimated';
+import { useModality } from '@/contexts/ModalityContext';
 
 const TypingDot = ({ delay }: { delay: number }) => {
   const translateY = useSharedValue(0);
   useEffect(() => {
-    translateY.value = withDelay(delay, withRepeat(withSequence(withTiming(-8, { duration: 300 }), withTiming(0, { duration: 300 })), -1, true));
+    translateY.value = withDelay(delay, withRepeat(
+      withSequence(withTiming(-8, { duration: 300 }), withTiming(0, { duration: 300 })),
+      -1, true,
+    ));
   }, []);
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
   return <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#6B7194', marginHorizontal: 3 }, style]} />;
@@ -28,12 +35,16 @@ const TypingIndicator = () => (
 );
 
 export default function CoachSessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, modality: modalityParam } = useLocalSearchParams<{ id: string; modality?: string }>();
   const convId = parseInt(id, 10);
-  
+
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  
+  const { modality: globalModality } = useModality();
+  const modality = modalityParam ?? globalModality;
+
+  const activeColor = modality === 'cbt' ? '#6366F1' : '#F59E0B';
+
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -49,11 +60,11 @@ export default function CoachSessionScreen() {
     }
   }, [conversation]);
 
-  const handleSendBetter = async () => {
+  const handleSend = async () => {
     if (!inputText.trim()) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     const textToSend = inputText.trim();
     const userMessage = {
       id: Date.now(),
@@ -61,7 +72,7 @@ export default function CoachSessionScreen() {
       content: textToSend,
       createdAt: new Date().toISOString(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsStreaming(true);
@@ -69,28 +80,31 @@ export default function CoachSessionScreen() {
     setStreamedContent('');
 
     try {
-      const response = await expoFetch(`https://${process.env.EXPO_PUBLIC_DOMAIN}/api/openai/conversations/${convId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: textToSend }),
-        // @ts-ignore
-        reactNative: { textStreaming: true },
-      });
+      const response = await expoFetch(
+        `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/openai/conversations/${convId}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: textToSend, modality }),
+          // @ts-ignore
+          reactNative: { textStreaming: true },
+        },
+      );
 
       if (!response.body) throw new Error('No response body');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
-        
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
@@ -99,12 +113,11 @@ export default function CoachSessionScreen() {
                 currentStream += json.content;
                 setStreamedContent(currentStream);
               }
-            } catch {}
+            } catch { /* ignore parse errors */ }
           }
         }
       }
-      
-      // End of stream
+
       setIsStreaming(false);
       setMessages(prev => [
         ...prev,
@@ -113,7 +126,7 @@ export default function CoachSessionScreen() {
           role: 'assistant',
           content: currentStream,
           createdAt: new Date().toISOString(),
-        }
+        },
       ]);
       setStreamedContent('');
     } catch (e) {
@@ -135,28 +148,28 @@ export default function CoachSessionScreen() {
   const renderMessage = ({ item }: { item: any }) => {
     const isUser = item.role === 'user';
     return (
-      <Animated.View 
+      <Animated.View
         entering={isUser ? SlideInDown.springify().damping(16) : SlideInUp.springify().damping(16)}
         style={[styles.messageContainer, isUser ? styles.messageUser : styles.messageAssistant]}
       >
         <View style={[
           styles.messageBubble,
-          isUser 
-            ? { backgroundColor: colors.primary }
-            : { 
-                backgroundColor: colors.card, 
-                borderLeftWidth: 4, 
-                borderLeftColor: colors.accent,
-                shadowColor: colors.accent,
+          isUser
+            ? { backgroundColor: activeColor }
+            : {
+                backgroundColor: colors.card,
+                borderLeftWidth: 4,
+                borderLeftColor: activeColor,
+                shadowColor: activeColor,
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
                 shadowOffset: { width: -2, height: 0 },
-                elevation: 4
-              }
+                elevation: 4,
+              },
         ]}>
           <Text style={[
             styles.messageText,
-            { color: isUser ? colors.primaryForeground : colors.cardForeground }
+            { color: isUser ? '#000' : colors.cardForeground },
           ]}>
             {renderBoldText(item.content)}
           </Text>
@@ -176,8 +189,8 @@ export default function CoachSessionScreen() {
     opacity: glowOpacity.value,
     position: 'absolute',
     top: -1, left: 0, right: 0, height: 2,
-    backgroundColor: '#F59E0B',
-    shadowColor: '#F59E0B',
+    backgroundColor: activeColor,
+    shadowColor: activeColor,
     shadowOpacity: 0.8,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: -2 },
@@ -187,13 +200,13 @@ export default function CoachSessionScreen() {
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={activeColor} />
       </View>
     );
   }
 
   return (
-    <KeyboardControllerView 
+    <KeyboardControllerView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior="padding"
       keyboardVerticalOffset={0}
@@ -210,16 +223,16 @@ export default function CoachSessionScreen() {
             <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.messageContainer, styles.messageAssistant]}>
               <View style={[
                 styles.messageBubble,
-                { 
-                  backgroundColor: colors.card, 
-                  borderLeftWidth: 4, 
-                  borderLeftColor: colors.accent,
-                  shadowColor: colors.accent,
+                {
+                  backgroundColor: colors.card,
+                  borderLeftWidth: 4,
+                  borderLeftColor: activeColor,
+                  shadowColor: activeColor,
                   shadowOpacity: 0.3,
                   shadowRadius: 8,
                   shadowOffset: { width: -2, height: 0 },
-                  elevation: 4
-                }
+                  elevation: 4,
+                },
               ]}>
                 {streamedContent ? (
                   <Animated.View entering={FadeIn.duration(300)}>
@@ -235,10 +248,10 @@ export default function CoachSessionScreen() {
           ) : null
         }
       />
-      
+
       <View style={[
         styles.inputContainer,
-        { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom || 16 }
+        { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom || 16 },
       ]}>
         <Animated.View style={glowStyle} />
         <TextInput
@@ -247,25 +260,24 @@ export default function CoachSessionScreen() {
           onChangeText={setInputText}
           onFocus={() => setIsInputFocused(true)}
           onBlur={() => setIsInputFocused(false)}
-          placeholder="Message coach..."
+          placeholder={modality === 'cbt' ? 'Share a situation or thought...' : 'Share what\'s on your mind...'}
           placeholderTextColor={colors.mutedForeground}
           multiline
           maxLength={1000}
         />
-        
+
         <View style={styles.sendButtonWrapper}>
           {inputText.trim() && !isStreaming ? (
             <Animated.View entering={ZoomIn.springify().damping(14)} exiting={ZoomOut.duration(200)}>
               <TouchableOpacity
-                style={[styles.sendButton, { backgroundColor: colors.primary }]}
-                onPress={handleSendBetter}
+                style={[styles.sendButton, { backgroundColor: activeColor }]}
+                onPress={handleSend}
               >
-                <Feather name="send" size={18} color={colors.primaryForeground} />
+                <Feather name="send" size={18} color="#000" />
               </TouchableOpacity>
             </Animated.View>
           ) : null}
         </View>
-
       </View>
     </KeyboardControllerView>
   );
@@ -280,8 +292,15 @@ const styles = StyleSheet.create({
   messageAssistant: { justifyContent: 'flex-start' },
   messageBubble: { maxWidth: '85%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20 },
   messageText: { fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, gap: 12 },
-  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 16, fontFamily: 'Inter_400Regular' },
+  inputContainer: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, gap: 12,
+  },
+  input: {
+    flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22,
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
+    fontSize: 16, fontFamily: 'Inter_400Regular',
+  },
   sendButtonWrapper: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', paddingBottom: 4 },
   sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

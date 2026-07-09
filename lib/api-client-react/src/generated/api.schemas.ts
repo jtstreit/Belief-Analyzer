@@ -146,10 +146,16 @@ export interface OpenaiMessage {
 export interface OpenaiConversationInput {
   title: string;
   beliefId?: number;
+  /** rebt or cbt — determines coach framework */
+  modality?: string;
 }
 
 export interface OpenaiMessageInput {
   content: string;
+  /** rebt or cbt — selects coach system prompt */
+  modality?: string;
+  /** Optional context from a completed exercise to anchor the coaching */
+  exerciseContext?: string;
 }
 
 export interface OpenaiConversationWithMessages {
@@ -157,6 +163,45 @@ export interface OpenaiConversationWithMessages {
   title: string;
   createdAt: string;
   messages: OpenaiMessage[];
+}
+
+export interface ExerciseSession {
+  id: number;
+  exerciseId: string;
+  modality: string;
+  /** Keyed responses for each exercise step */
+  stepData?: unknown;
+  /** @nullable */
+  moodBefore?: number | null;
+  /** @nullable */
+  moodAfter?: number | null;
+  /** @nullable */
+  sudsRating?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExerciseSessionInput {
+  exerciseId: string;
+  modality: string;
+  stepData?: unknown;
+  moodBefore?: number;
+  moodAfter?: number;
+  sudsRating?: number;
+  notes?: string;
+  completed?: boolean;
+}
+
+export interface ExerciseSessionUpdate {
+  stepData?: unknown;
+  moodBefore?: number;
+  moodAfter?: number;
+  sudsRating?: number;
+  notes?: string;
+  completed?: boolean;
 }
 
 export type ListTelemetryParams = {
@@ -171,5 +216,11 @@ beliefType?: string;
 
 export type ListAutomaticThoughtsParams = {
 limit?: number;
+};
+
+export type ListExerciseSessionsParams = {
+exerciseId?: string;
+modality?: string;
+completed?: boolean;
 };
 

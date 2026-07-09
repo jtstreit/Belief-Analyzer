@@ -2,3 +2,4 @@
 - [DeepSeek via OpenAI client](deepseek-setup.md) — use openai client from @workspace/integrations-openai-ai-server; model string "deepseek-ai/DeepSeek-V4-Pro"
 - [Zod v3 codegen constraint](zod-codegen.md) — bare `type: object` in OpenAPI spec generates zod.looseObject() which only exists in Zod v4; use specific schemas or omit bare object fields
 - [Native capture bridge contract](native-capture-contract.md) — all native imports must be lazy+Platform.OS-guarded; NativeCaptureModule at modules/native-capture/NativeCaptureModule.ts
+- [Dual-modality therapy engine](dual-modality-engine.md) — REBT/CBT toggle, exercise catalog, guided runner, modality-aware coach; key architectural decisions to stay consistent with.

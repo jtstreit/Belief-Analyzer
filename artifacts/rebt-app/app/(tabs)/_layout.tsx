@@ -7,6 +7,7 @@ import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
+import { useModality } from '@/contexts/ModalityContext';
 
 function NativeTabLayout() {
   return (
@@ -19,9 +20,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' }} />
         <Label>Check-In</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="beliefs">
-        <Icon sf={{ default: 'lightbulb', selected: 'lightbulb.fill' }} />
-        <Label>Beliefs</Label>
+      <NativeTabs.Trigger name="library">
+        <Icon sf={{ default: 'book', selected: 'book.fill' }} />
+        <Label>Library</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="mindmap">
         <Icon sf={{ default: 'rectangle.3.group', selected: 'rectangle.3.group.fill' }} />
@@ -35,6 +36,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
         <Label>Coach</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <Icon sf={{ default: 'gear', selected: 'gear' }} />
+        <Label>Settings</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -45,11 +50,13 @@ function ClassicTabLayout() {
   const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
+  const { modality } = useModality();
+  const activeColor = modality === 'rebt' ? colors.primary : colors.accent;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarStyle: {
@@ -62,18 +69,9 @@ function ClassicTabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={'dark'}
-              style={StyleSheet.absoluteFill}
-            />
+            <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
         tabBarLabelStyle: { fontSize: 10 },
       }}
@@ -103,14 +101,14 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="beliefs"
+        name="library"
         options={{
-          title: 'Beliefs',
+          title: 'Library',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="lightbulb" tintColor={color} size={22} />
+              <SymbolView name="book" tintColor={color} size={24} />
             ) : (
-              <Feather name="zap" size={20} color={color} />
+              <Feather name="book-open" size={22} color={color} />
             ),
         }}
       />
@@ -150,6 +148,20 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="gear" tintColor={color} size={24} />
+            ) : (
+              <Feather name="settings" size={22} color={color} />
+            ),
+        }}
+      />
+      {/* Hidden from tab bar but still registered */}
+      <Tabs.Screen name="beliefs" options={{ href: null }} />
     </Tabs>
   );
 }

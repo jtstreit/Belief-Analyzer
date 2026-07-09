@@ -9,4 +9,6 @@
 export interface OpenaiConversationInput {
   title: string;
   beliefId?: number;
+  /** rebt or cbt — determines coach framework */
+  modality?: string;
 }

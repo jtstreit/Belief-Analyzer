@@ -1,0 +1,23 @@
+kind = "mobile"
+previewPath = "/"
+title = "REBT Companion"
+version = "1.0.0"
+id = "artifacts/rebt-app"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 22680
+
+[services.development]
+run = "pnpm --filter @workspace/rebt-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rebt-app", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/rebt-app", "run", "serve" ]
+
+[services.env]
+PORT = "22680"
+BASE_PATH = "/"

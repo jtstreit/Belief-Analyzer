@@ -20,8 +20,16 @@ function NativeTabLayout() {
         <Label>Check-In</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="beliefs">
-        <Icon sf={{ default: 'brain.head.profile', selected: 'brain.head.profile' }} />
+        <Icon sf={{ default: 'lightbulb', selected: 'lightbulb.fill' }} />
         <Label>Beliefs</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="mindmap">
+        <Icon sf={{ default: 'rectangle.3.group', selected: 'rectangle.3.group.fill' }} />
+        <Label>Mind Map</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="feed">
+        <Icon sf={{ default: 'tray', selected: 'tray.full.fill' }} />
+        <Label>Feed</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="coach">
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
@@ -67,6 +75,7 @@ function ClassicTabLayout() {
               ]}
             />
           ) : null,
+        tabBarLabelStyle: { fontSize: 10 },
       }}
     >
       <Tabs.Screen
@@ -75,9 +84,9 @@ function ClassicTabLayout() {
           title: 'Home',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
+              <SymbolView name="house" tintColor={color} size={22} />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <Feather name="home" size={20} color={color} />
             ),
         }}
       />
@@ -87,9 +96,9 @@ function ClassicTabLayout() {
           title: 'Check-In',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="plus.circle" tintColor={color} size={24} />
+              <SymbolView name="plus.circle" tintColor={color} size={22} />
             ) : (
-              <Feather name="plus-circle" size={22} color={color} />
+              <Feather name="plus-circle" size={20} color={color} />
             ),
         }}
       />
@@ -99,9 +108,33 @@ function ClassicTabLayout() {
           title: 'Beliefs',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="lightbulb" tintColor={color} size={24} />
+              <SymbolView name="lightbulb" tintColor={color} size={22} />
             ) : (
-              <Feather name="zap" size={22} color={color} />
+              <Feather name="zap" size={20} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="mindmap"
+        options={{
+          title: 'Map',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="rectangle.3.group" tintColor={color} size={22} />
+            ) : (
+              <Feather name="layers" size={20} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="feed"
+        options={{
+          title: 'Feed',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="tray" tintColor={color} size={22} />
+            ) : (
+              <Feather name="activity" size={20} color={color} />
             ),
         }}
       />
@@ -111,9 +144,9 @@ function ClassicTabLayout() {
           title: 'Coach',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="bubble.left.and.bubble.right" tintColor={color} size={24} />
+              <SymbolView name="bubble.left.and.bubble.right" tintColor={color} size={22} />
             ) : (
-              <Feather name="message-circle" size={22} color={color} />
+              <Feather name="message-circle" size={20} color={color} />
             ),
         }}
       />

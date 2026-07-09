@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, telemetryEventsTable } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
-import { CreateTelemetryBody } from "@workspace/api-zod";
+import { CreateTelemetryBody, CreateTelemetryBatchBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -47,6 +47,7 @@ router.post("/telemetry", async (req, res) => {
         type: parsed.data.type,
         mood: parsed.data.mood ?? null,
         thoughtText: parsed.data.thoughtText ?? null,
+        source: parsed.data.source ?? null,
       })
       .returning();
 
@@ -54,6 +55,39 @@ router.post("/telemetry", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to create telemetry event");
     res.status(500).json({ error: "Failed to create telemetry event" });
+  }
+});
+
+// POST /telemetry/batch — bulk ingest from native capture services
+router.post("/telemetry/batch", async (req, res) => {
+  try {
+    const parsed = CreateTelemetryBatchBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+
+    if (parsed.data.events.length === 0) {
+      res.status(201).json([]);
+      return;
+    }
+
+    const rows = parsed.data.events.map((e) => ({
+      type: e.type,
+      mood: e.mood ?? null,
+      thoughtText: e.thoughtText ?? null,
+      source: e.source ?? null,
+    }));
+
+    const inserted = await db
+      .insert(telemetryEventsTable)
+      .values(rows)
+      .returning();
+
+    res.status(201).json(inserted);
+  } catch (err) {
+    req.log.error({ err }, "Failed to create telemetry batch");
+    res.status(500).json({ error: "Failed to create telemetry batch" });
   }
 });
 

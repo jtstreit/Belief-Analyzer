@@ -6,16 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface TelemetryEvent {
+export interface AutomaticThought {
   id: number;
-  type: string;
   /** @nullable */
-  mood?: string | null;
+  situation?: string | null;
+  thoughtText: string;
   /** @nullable */
-  thoughtText?: string | null;
+  emotion?: string | null;
   /** @nullable */
-  source?: string | null;
+  intensityPct?: number | null;
+  distortionTags: string[];
   /** @nullable */
-  processedAt?: Date | null;
+  telemetryEventId?: number | null;
   createdAt: Date;
 }

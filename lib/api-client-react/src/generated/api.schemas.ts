@@ -16,6 +16,10 @@ export interface TelemetryEvent {
   mood?: string | null;
   /** @nullable */
   thoughtText?: string | null;
+  /** @nullable */
+  source?: string | null;
+  /** @nullable */
+  processedAt?: string | null;
   createdAt: string;
 }
 
@@ -23,6 +27,55 @@ export interface TelemetryEventInput {
   type: string;
   mood?: string;
   thoughtText?: string;
+  source?: string;
+}
+
+export interface TelemetryBatchInput {
+  events: TelemetryEventInput[];
+}
+
+export interface AutomaticThought {
+  id: number;
+  /** @nullable */
+  situation?: string | null;
+  thoughtText: string;
+  /** @nullable */
+  emotion?: string | null;
+  /** @nullable */
+  intensityPct?: number | null;
+  distortionTags: string[];
+  /** @nullable */
+  telemetryEventId?: number | null;
+  createdAt: string;
+}
+
+export interface IntermediateBelief {
+  id: number;
+  beliefText: string;
+  category: string;
+  confidence: number;
+  evidenceCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoreSchema {
+  id: number;
+  schemaText: string;
+  domain: string;
+  confidence: number;
+  evidenceCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CognitiveMindMap {
+  automaticThoughts: AutomaticThought[];
+  intermediateBeliefs: IntermediateBelief[];
+  coreSchemas: CoreSchema[];
+  unprocessedCount: number;
+  /** @nullable */
+  lastAnalyzedAt?: string | null;
 }
 
 export interface Belief {
@@ -114,5 +167,9 @@ type?: string;
 export type ListBeliefsParams = {
 status?: string;
 beliefType?: string;
+};
+
+export type ListAutomaticThoughtsParams = {
+limit?: number;
 };
 

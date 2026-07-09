@@ -47,6 +47,16 @@ function RootLayoutNav() {
           headerTintColor: colors.foreground,
         }}
       />
+      <Stack.Screen
+        name="permissions"
+        options={{
+          headerShown: true,
+          title: 'Capture Setup',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+        }}
+      />
     </Stack>
   );
 }

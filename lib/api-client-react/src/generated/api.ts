@@ -21,10 +21,15 @@ import type {
 
 import type {
   ApiError,
+  AutomaticThought,
   Belief,
   BeliefInput,
   BeliefUpdate,
+  CognitiveMindMap,
+  CoreSchema,
   HealthStatus,
+  IntermediateBelief,
+  ListAutomaticThoughtsParams,
   ListBeliefsParams,
   ListTelemetryParams,
   OpenaiConversation,
@@ -33,6 +38,7 @@ import type {
   OpenaiMessage,
   OpenaiMessageInput,
   PatternSummary,
+  TelemetryBatchInput,
   TelemetryEvent,
   TelemetryEventInput
 } from './api.schemas';
@@ -295,6 +301,77 @@ export const useCreateTelemetry = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateTelemetryMutationOptions(options));
+    }
+
+export const getCreateTelemetryBatchUrl = () => {
+
+
+
+
+  return `/api/telemetry/batch`
+}
+
+/**
+ * @summary Ingest a batch of telemetry events (e.g. a burst from NotificationListenerService)
+ */
+export const createTelemetryBatch = async (telemetryBatchInput: TelemetryBatchInput, options?: RequestInit): Promise<TelemetryEvent[]> => {
+
+  return customFetch<TelemetryEvent[]>(getCreateTelemetryBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(telemetryBatchInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTelemetryBatchMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTelemetryBatch>>, TError,{data: BodyType<TelemetryBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTelemetryBatch>>, TError,{data: BodyType<TelemetryBatchInput>}, TContext> => {
+
+const mutationKey = ['createTelemetryBatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTelemetryBatch>>, {data: BodyType<TelemetryBatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTelemetryBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTelemetryBatchMutationResult = NonNullable<Awaited<ReturnType<typeof createTelemetryBatch>>>
+    export type CreateTelemetryBatchMutationBody = BodyType<TelemetryBatchInput>
+    export type CreateTelemetryBatchMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Ingest a batch of telemetry events (e.g. a burst from NotificationListenerService)
+ */
+export const useCreateTelemetryBatch = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTelemetryBatch>>, TError,{data: BodyType<TelemetryBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTelemetryBatch>>,
+        TError,
+        {data: BodyType<TelemetryBatchInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTelemetryBatchMutationOptions(options));
     }
 
 export const getListBeliefsUrl = (params?: ListBeliefsParams,) => {
@@ -748,6 +825,393 @@ export const useAnalyzePatterns = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getAnalyzePatternsMutationOptions(options));
     }
+
+export const getAnalyzeCognitiveUrl = () => {
+
+
+
+
+  return `/api/cognitive/analyze`
+}
+
+/**
+ * Extracts automatic thoughts with distortion tags, synthesizes intermediate beliefs (rules/assumptions/attitudes), and infers core schemas (helpless/unlovable/worthless). Idempotent — re-running deepens confidence and evidence counts rather than creating duplicates.
+ * @summary Run the layered cognitive engine on all unprocessed telemetry
+ */
+export const analyzeCognitive = async ( options?: RequestInit): Promise<CognitiveMindMap> => {
+
+  return customFetch<CognitiveMindMap>(getAnalyzeCognitiveUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAnalyzeCognitiveMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeCognitive>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeCognitive>>, TError,void, TContext> => {
+
+const mutationKey = ['analyzeCognitive'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeCognitive>>, void> = () => {
+
+
+          return  analyzeCognitive(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeCognitiveMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeCognitive>>>
+
+    export type AnalyzeCognitiveMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Run the layered cognitive engine on all unprocessed telemetry
+ */
+export const useAnalyzeCognitive = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeCognitive>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeCognitive>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getAnalyzeCognitiveMutationOptions(options));
+    }
+
+export const getGetCognitiveMapUrl = () => {
+
+
+
+
+  return `/api/cognitive/map`
+}
+
+/**
+ * @summary Get the full four-layer cognitive conceptualization
+ */
+export const getCognitiveMap = async ( options?: RequestInit): Promise<CognitiveMindMap> => {
+
+  return customFetch<CognitiveMindMap>(getGetCognitiveMapUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCognitiveMapQueryKey = () => {
+    return [
+    `/api/cognitive/map`
+    ] as const;
+    }
+
+
+export const getGetCognitiveMapQueryOptions = <TData = Awaited<ReturnType<typeof getCognitiveMap>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCognitiveMap>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCognitiveMapQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCognitiveMap>>> = ({ signal }) => getCognitiveMap({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCognitiveMap>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCognitiveMapQueryResult = NonNullable<Awaited<ReturnType<typeof getCognitiveMap>>>
+export type GetCognitiveMapQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the full four-layer cognitive conceptualization
+ */
+
+export function useGetCognitiveMap<TData = Awaited<ReturnType<typeof getCognitiveMap>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCognitiveMap>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCognitiveMapQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAutomaticThoughtsUrl = (params?: ListAutomaticThoughtsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/cognitive/automatic-thoughts?${stringifiedParams}` : `/api/cognitive/automatic-thoughts`
+}
+
+/**
+ * @summary List extracted automatic thoughts (Layer 1)
+ */
+export const listAutomaticThoughts = async (params?: ListAutomaticThoughtsParams, options?: RequestInit): Promise<AutomaticThought[]> => {
+
+  return customFetch<AutomaticThought[]>(getListAutomaticThoughtsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAutomaticThoughtsQueryKey = (params?: ListAutomaticThoughtsParams,) => {
+    return [
+    `/api/cognitive/automatic-thoughts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAutomaticThoughtsQueryOptions = <TData = Awaited<ReturnType<typeof listAutomaticThoughts>>, TError = ErrorType<unknown>>(params?: ListAutomaticThoughtsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAutomaticThoughts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAutomaticThoughtsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAutomaticThoughts>>> = ({ signal }) => listAutomaticThoughts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAutomaticThoughts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAutomaticThoughtsQueryResult = NonNullable<Awaited<ReturnType<typeof listAutomaticThoughts>>>
+export type ListAutomaticThoughtsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List extracted automatic thoughts (Layer 1)
+ */
+
+export function useListAutomaticThoughts<TData = Awaited<ReturnType<typeof listAutomaticThoughts>>, TError = ErrorType<unknown>>(
+ params?: ListAutomaticThoughtsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAutomaticThoughts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAutomaticThoughtsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListIntermediateBeliefsUrl = () => {
+
+
+
+
+  return `/api/cognitive/intermediate-beliefs`
+}
+
+/**
+ * @summary List intermediate beliefs — rules, assumptions, attitudes (Layer 2)
+ */
+export const listIntermediateBeliefs = async ( options?: RequestInit): Promise<IntermediateBelief[]> => {
+
+  return customFetch<IntermediateBelief[]>(getListIntermediateBeliefsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListIntermediateBeliefsQueryKey = () => {
+    return [
+    `/api/cognitive/intermediate-beliefs`
+    ] as const;
+    }
+
+
+export const getListIntermediateBeliefsQueryOptions = <TData = Awaited<ReturnType<typeof listIntermediateBeliefs>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listIntermediateBeliefs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListIntermediateBeliefsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listIntermediateBeliefs>>> = ({ signal }) => listIntermediateBeliefs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listIntermediateBeliefs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListIntermediateBeliefsQueryResult = NonNullable<Awaited<ReturnType<typeof listIntermediateBeliefs>>>
+export type ListIntermediateBeliefsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List intermediate beliefs — rules, assumptions, attitudes (Layer 2)
+ */
+
+export function useListIntermediateBeliefs<TData = Awaited<ReturnType<typeof listIntermediateBeliefs>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listIntermediateBeliefs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListIntermediateBeliefsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListCoreSchemasUrl = () => {
+
+
+
+
+  return `/api/cognitive/core-schemas`
+}
+
+/**
+ * @summary List core schemas — helpless / unlovable / worthless (Layer 3)
+ */
+export const listCoreSchemas = async ( options?: RequestInit): Promise<CoreSchema[]> => {
+
+  return customFetch<CoreSchema[]>(getListCoreSchemasUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCoreSchemasQueryKey = () => {
+    return [
+    `/api/cognitive/core-schemas`
+    ] as const;
+    }
+
+
+export const getListCoreSchemasQueryOptions = <TData = Awaited<ReturnType<typeof listCoreSchemas>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCoreSchemas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCoreSchemasQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCoreSchemas>>> = ({ signal }) => listCoreSchemas({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCoreSchemas>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCoreSchemasQueryResult = NonNullable<Awaited<ReturnType<typeof listCoreSchemas>>>
+export type ListCoreSchemasQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List core schemas — helpless / unlovable / worthless (Layer 3)
+ */
+
+export function useListCoreSchemas<TData = Awaited<ReturnType<typeof listCoreSchemas>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCoreSchemas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCoreSchemasQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListOpenaiConversationsUrl = () => {
 

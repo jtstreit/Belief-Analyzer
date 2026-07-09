@@ -1,0 +1,409 @@
+import { Router } from "express";
+import {
+  db,
+  telemetryEventsTable,
+  automaticThoughtsTable,
+  intermediateBeliefsCogTable,
+  coreSchemasTable,
+} from "@workspace/db";
+import { isNull, inArray, desc, eq } from "drizzle-orm";
+import { openai } from "@workspace/integrations-openai-ai-server";
+
+const router = Router();
+
+// ─── Helper: assemble the full four-layer map from DB ──────────────────────
+
+async function buildMindMap() {
+  const [thoughts, iBeliefs, cSchemas, unprocessedRows] = await Promise.all([
+    db
+      .select()
+      .from(automaticThoughtsTable)
+      .orderBy(desc(automaticThoughtsTable.createdAt))
+      .limit(50),
+    db
+      .select()
+      .from(intermediateBeliefsCogTable)
+      .orderBy(desc(intermediateBeliefsCogTable.confidence)),
+    db.select().from(coreSchemasTable).orderBy(desc(coreSchemasTable.confidence)),
+    db
+      .select({ id: telemetryEventsTable.id })
+      .from(telemetryEventsTable)
+      .where(isNull(telemetryEventsTable.processedAt)),
+  ]);
+
+  const lastThought = thoughts[0];
+  return {
+    automaticThoughts: thoughts,
+    intermediateBeliefs: iBeliefs,
+    coreSchemas: cSchemas,
+    unprocessedCount: unprocessedRows.length,
+    lastAnalyzedAt: lastThought ? lastThought.createdAt.toISOString() : null,
+  };
+}
+
+// ─── GET /cognitive/map ────────────────────────────────────────────────────
+
+router.get("/cognitive/map", async (req, res) => {
+  try {
+    res.json(await buildMindMap());
+  } catch (err) {
+    req.log.error({ err }, "Failed to get cognitive map");
+    res.status(500).json({ error: "Failed to get cognitive map" });
+  }
+});
+
+// ─── GET /cognitive/automatic-thoughts ────────────────────────────────────
+
+router.get("/cognitive/automatic-thoughts", async (req, res) => {
+  try {
+    const limit = req.query["limit"] ? parseInt(req.query["limit"] as string) : 50;
+    const thoughts = await db
+      .select()
+      .from(automaticThoughtsTable)
+      .orderBy(desc(automaticThoughtsTable.createdAt))
+      .limit(limit);
+    res.json(thoughts);
+  } catch (err) {
+    req.log.error({ err }, "Failed to list automatic thoughts");
+    res.status(500).json({ error: "Failed to fetch automatic thoughts" });
+  }
+});
+
+// ─── GET /cognitive/intermediate-beliefs ──────────────────────────────────
+
+router.get("/cognitive/intermediate-beliefs", async (req, res) => {
+  try {
+    const beliefs = await db
+      .select()
+      .from(intermediateBeliefsCogTable)
+      .orderBy(desc(intermediateBeliefsCogTable.confidence));
+    res.json(beliefs);
+  } catch (err) {
+    req.log.error({ err }, "Failed to list intermediate beliefs");
+    res.status(500).json({ error: "Failed to fetch intermediate beliefs" });
+  }
+});
+
+// ─── GET /cognitive/core-schemas ──────────────────────────────────────────
+
+router.get("/cognitive/core-schemas", async (req, res) => {
+  try {
+    const schemas = await db
+      .select()
+      .from(coreSchemasTable)
+      .orderBy(desc(coreSchemasTable.confidence));
+    res.json(schemas);
+  } catch (err) {
+    req.log.error({ err }, "Failed to list core schemas");
+    res.status(500).json({ error: "Failed to fetch core schemas" });
+  }
+});
+
+// ─── POST /cognitive/analyze ───────────────────────────────────────────────
+//
+// Three-pass idempotent LLM engine:
+//   Pass 1 — extract automatic thoughts from unprocessed telemetry, mark processed
+//   Pass 2 — synthesise / upsert intermediate beliefs from all thoughts
+//   Pass 3 — infer / upsert core schemas from intermediate beliefs
+//
+// Confidence and evidenceCount on existing rows accumulate rather than reset.
+
+router.post("/cognitive/analyze", async (req, res) => {
+  try {
+    // ── Pass 0: fetch unprocessed telemetry ──────────────────────────
+    const unprocessed = await db
+      .select()
+      .from(telemetryEventsTable)
+      .where(isNull(telemetryEventsTable.processedAt))
+      .orderBy(desc(telemetryEventsTable.createdAt))
+      .limit(100);
+
+    const withContent = unprocessed.filter(
+      (e) => e.thoughtText && e.thoughtText.trim().length > 5,
+    );
+    const withoutContent = unprocessed.filter(
+      (e) => !e.thoughtText || e.thoughtText.trim().length <= 5,
+    );
+
+    // Events without meaningful text will never yield thoughts — consume them
+    // eagerly so they don't inflate the backlog badge on retry.
+    if (withoutContent.length > 0) {
+      await db
+        .update(telemetryEventsTable)
+        .set({ processedAt: new Date() })
+        .where(inArray(telemetryEventsTable.id, withoutContent.map((e) => e.id)));
+    }
+
+    // ── Pass 1: extract automatic thoughts from content events ────────
+    // Events in `withContent` are marked processed ONLY inside a transaction
+    // after their thoughts are successfully persisted. If DeepSeek fails or
+    // insertion throws, the transaction rolls back and events remain
+    // unprocessed so the next analyze call can retry them.
+    if (withContent.length > 0) {
+      const entriesText = withContent
+        .map(
+          (e, i) =>
+            `${i + 1}. [type:${e.type}] [source:${e.source ?? "manual"}] "${e.thoughtText}"`,
+        )
+        .join("\n");
+
+      const layer1System = `You are a Beck-model CBT expert. Extract automatic thoughts from the entries below.
+For each entry return one or more automatic thought objects as a JSON array. Each object:
+  entryIndex: number (1-based, matches the entry number)
+  thoughtText: string — the core automatic thought (concise, first-person)
+  situation: string | null — the triggering situation
+  emotion: string | null — primary emotion (e.g. "anxiety", "sadness", "anger")
+  intensityPct: number 0–100 — estimated emotional intensity
+  distortionTags: string[] — applicable Burns cognitive distortions from this exact list:
+    all_or_nothing, overgeneralization, mental_filter, discounting_positive, mind_reading,
+    fortune_telling, magnification, minimization, emotional_reasoning,
+    should_statements, labeling, personalization
+
+Return ONLY a valid JSON array — no markdown, no explanation.`;
+
+      // This call can throw (network error, timeout, API error).
+      // Let it propagate — the catch block returns 500 and events stay retryable.
+      const layer1Res = await openai.chat.completions.create({
+        model: "deepseek-ai/DeepSeek-V4-Pro",
+        max_completion_tokens: 3000,
+        messages: [
+          { role: "system", content: layer1System },
+          { role: "user", content: `Entries:\n${entriesText}` },
+        ],
+      });
+
+      // Parse the LLM response — do NOT swallow parse errors.
+      // If JSON.parse throws (malformed output), it propagates to the outer
+      // catch, returns 500, and withContent events remain unprocessed + retryable.
+      const responseContent = layer1Res.choices[0]?.message?.content ?? "";
+      const parsedResponse: unknown = JSON.parse(responseContent);
+      if (!Array.isArray(parsedResponse)) {
+        throw new Error(
+          `LLM returned non-array response (type: ${typeof parsedResponse}). Events left retryable.`,
+        );
+      }
+
+      // Validate individual thought objects — malformed entries are skipped,
+      // not silently treated as successes.
+      type ValidThought = {
+        entryIndex: number;
+        thoughtText: string;
+        situation?: string | null;
+        emotion?: string | null;
+        intensityPct?: number | null;
+        distortionTags?: string[];
+      };
+      const validThoughts: ValidThought[] = (parsedResponse as unknown[]).filter(
+        (t): t is ValidThought => {
+          if (typeof t !== "object" || t === null) return false;
+          const obj = t as Record<string, unknown>;
+          return (
+            typeof obj["entryIndex"] === "number" &&
+            (obj["entryIndex"] as number) >= 1 &&
+            (obj["entryIndex"] as number) <= withContent.length &&
+            typeof obj["thoughtText"] === "string" &&
+            (obj["thoughtText"] as string).trim().length > 0
+          );
+        },
+      );
+
+      // Atomic: insert validated thoughts and mark only their source events as
+      // processed. Events with no valid thoughts extracted remain unprocessed
+      // and retryable. Transaction rollback leaves everything retryable.
+      const processedEventIds = new Set<number>();
+      await db.transaction(async (tx) => {
+        for (const t of validThoughts) {
+          const sourceEvent = withContent[t.entryIndex - 1];
+          if (!sourceEvent) continue;
+          await tx.insert(automaticThoughtsTable).values({
+            thoughtText: t.thoughtText.trim(),
+            situation: typeof t.situation === "string" ? t.situation : null,
+            emotion: typeof t.emotion === "string" ? t.emotion : null,
+            intensityPct:
+              typeof t.intensityPct === "number"
+                ? Math.min(100, Math.max(0, Math.round(t.intensityPct)))
+                : null,
+            distortionTags: Array.isArray(t.distortionTags)
+              ? t.distortionTags.filter((d) => typeof d === "string")
+              : [],
+            telemetryEventId: sourceEvent.id,
+          });
+          processedEventIds.add(sourceEvent.id);
+        }
+        if (processedEventIds.size > 0) {
+          await tx
+            .update(telemetryEventsTable)
+            .set({ processedAt: new Date() })
+            .where(inArray(telemetryEventsTable.id, [...processedEventIds]));
+        }
+        // Events with zero valid thoughts are intentionally left unprocessed
+        // (processedAt stays null) so they can be retried on next analyze call.
+      });
+    }
+
+    // ── Pass 2: upsert intermediate beliefs ──────────────────────────
+    const [allThoughts, existingIBeliefs] = await Promise.all([
+      db
+        .select()
+        .from(automaticThoughtsTable)
+        .orderBy(desc(automaticThoughtsTable.createdAt))
+        .limit(80),
+      db.select().from(intermediateBeliefsCogTable),
+    ]);
+
+    if (allThoughts.length > 0) {
+      const thoughtsSummary = allThoughts
+        .map(
+          (t) =>
+            `- "${t.thoughtText}" [${(t.distortionTags as string[]).join(", ") || "no distortions"}]`,
+        )
+        .join("\n");
+
+      const existingIText =
+        existingIBeliefs.length > 0
+          ? `\nExisting intermediate beliefs (reference by id when this batch confirms them):\n${existingIBeliefs.map((b) => `  id:${b.id} "${b.beliefText}" (${b.category})`).join("\n")}`
+          : "";
+
+      const layer2System = `You are a Beck-model CBT expert. From these automatic thoughts, synthesise intermediate beliefs — rules, assumptions, or attitudes.${existingIText}
+
+Return a JSON array. Each object:
+  beliefText: string — concise belief statement
+  category: "rule" | "assumption" | "attitude"
+    • rule: starts with "I must/should/have to…" or "People must…"
+    • assumption: conditional "If I X then Y" statements
+    • attitude: stable evaluative stance ("I am fundamentally inadequate")
+  matchesExistingId: number | null — id of an existing belief this confirms; null for new
+  initialConfidence: number 15–60 — initial confidence if new (higher = more thoughts support it)
+
+Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
+
+      const layer2Res = await openai.chat.completions.create({
+        model: "deepseek-ai/DeepSeek-V4-Pro",
+        max_completion_tokens: 2000,
+        messages: [
+          { role: "system", content: layer2System },
+          { role: "user", content: thoughtsSummary },
+        ],
+      });
+
+      let rawBeliefs: Array<{
+        beliefText: string;
+        category: string;
+        matchesExistingId?: number | null;
+        initialConfidence?: number;
+      }> = [];
+      try {
+        rawBeliefs = JSON.parse(layer2Res.choices[0]?.message?.content ?? "[]");
+      } catch {
+        rawBeliefs = [];
+      }
+
+      for (const b of rawBeliefs) {
+        if (!b.beliefText?.trim()) continue;
+        if (b.matchesExistingId) {
+          const existing = existingIBeliefs.find((e) => e.id === b.matchesExistingId);
+          if (existing) {
+            await db
+              .update(intermediateBeliefsCogTable)
+              .set({
+                evidenceCount: existing.evidenceCount + 1,
+                confidence: Math.min(95, existing.confidence + 10),
+                updatedAt: new Date(),
+              })
+              .where(eq(intermediateBeliefsCogTable.id, existing.id));
+          }
+        } else {
+          await db.insert(intermediateBeliefsCogTable).values({
+            beliefText: b.beliefText,
+            category: b.category ?? "rule",
+            confidence: b.initialConfidence ?? 20,
+            evidenceCount: 1,
+          });
+        }
+      }
+    }
+
+    // ── Pass 3: upsert core schemas ───────────────────────────────────
+    const [allIBeliefs, existingSchemas] = await Promise.all([
+      db
+        .select()
+        .from(intermediateBeliefsCogTable)
+        .orderBy(desc(intermediateBeliefsCogTable.confidence)),
+      db.select().from(coreSchemasTable),
+    ]);
+
+    if (allIBeliefs.length >= 2) {
+      const beliefsSummary = allIBeliefs
+        .map((b) => `- "${b.beliefText}" (${b.category}, confidence:${b.confidence})`)
+        .join("\n");
+
+      const existingSchemasText =
+        existingSchemas.length > 0
+          ? `\nExisting core schemas (reference by id when confirmed):\n${existingSchemas.map((s) => `  id:${s.id} "${s.schemaText}" (${s.domain})`).join("\n")}`
+          : "";
+
+      const layer3System = `You are a Beck-model CBT expert. From these intermediate beliefs, infer core schemas.${existingSchemasText}
+
+Core schema domains: "helpless" | "unlovable" | "worthless" | "other"
+Return a JSON array. Each object:
+  schemaText: string — core schema (e.g. "I am fundamentally incapable")
+  domain: "helpless" | "unlovable" | "worthless" | "other"
+  matchesExistingId: number | null
+  initialConfidence: number 10–50
+
+Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSON array.`;
+
+      const layer3Res = await openai.chat.completions.create({
+        model: "deepseek-ai/DeepSeek-V4-Pro",
+        max_completion_tokens: 1500,
+        messages: [
+          { role: "system", content: layer3System },
+          { role: "user", content: beliefsSummary },
+        ],
+      });
+
+      let rawSchemas: Array<{
+        schemaText: string;
+        domain: string;
+        matchesExistingId?: number | null;
+        initialConfidence?: number;
+      }> = [];
+      try {
+        rawSchemas = JSON.parse(layer3Res.choices[0]?.message?.content ?? "[]");
+      } catch {
+        rawSchemas = [];
+      }
+
+      for (const s of rawSchemas) {
+        if (!s.schemaText?.trim() || !s.domain) continue;
+        if (s.matchesExistingId) {
+          const existing = existingSchemas.find((e) => e.id === s.matchesExistingId);
+          if (existing) {
+            await db
+              .update(coreSchemasTable)
+              .set({
+                evidenceCount: existing.evidenceCount + 1,
+                confidence: Math.min(95, existing.confidence + 10),
+                updatedAt: new Date(),
+              })
+              .where(eq(coreSchemasTable.id, existing.id));
+          }
+        } else {
+          await db.insert(coreSchemasTable).values({
+            schemaText: s.schemaText,
+            domain: s.domain,
+            confidence: s.initialConfidence ?? 15,
+            evidenceCount: 1,
+          });
+        }
+      }
+    }
+
+    res.json(await buildMindMap());
+  } catch (err) {
+    req.log.error({ err }, "Failed to run cognitive analysis");
+    res.status(500).json({ error: "Failed to run cognitive analysis" });
+  }
+});
+
+export default router;

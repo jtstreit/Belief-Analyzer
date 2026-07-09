@@ -16,6 +16,8 @@ tags:
     description: Identified irrational beliefs
   - name: patterns
     description: Pattern analysis from telemetry
+  - name: cognitive
+    description: Layered cognitive conceptualization engine (automatic thoughts → intermediate beliefs → core schemas)
   - name: openai
     description: OpenAI AI chat operations
 paths:
@@ -74,6 +76,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TelemetryEvent"
+
+  /telemetry/batch:
+    post:
+      operationId: createTelemetryBatch
+      tags: [telemetry]
+      summary: Ingest a batch of telemetry events (e.g. a burst from NotificationListenerService)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryBatchInput"
+      responses:
+        "201":
+          description: Created telemetry events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TelemetryEvent"
 
   /beliefs:
     get:
@@ -197,6 +220,88 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Belief"
+
+  /cognitive/analyze:
+    post:
+      operationId: analyzeCognitive
+      tags: [cognitive]
+      summary: Run the layered cognitive engine on all unprocessed telemetry
+      description: >
+        Extracts automatic thoughts with distortion tags, synthesizes intermediate
+        beliefs (rules/assumptions/attitudes), and infers core schemas
+        (helpless/unlovable/worthless). Idempotent — re-running deepens confidence
+        and evidence counts rather than creating duplicates.
+      responses:
+        "200":
+          description: Updated cognitive mind map after analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CognitiveMindMap"
+
+  /cognitive/map:
+    get:
+      operationId: getCognitiveMap
+      tags: [cognitive]
+      summary: Get the full four-layer cognitive conceptualization
+      responses:
+        "200":
+          description: Four-layer cognitive mind map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CognitiveMindMap"
+
+  /cognitive/automatic-thoughts:
+    get:
+      operationId: listAutomaticThoughts
+      tags: [cognitive]
+      summary: List extracted automatic thoughts (Layer 1)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of automatic thoughts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AutomaticThought"
+
+  /cognitive/intermediate-beliefs:
+    get:
+      operationId: listIntermediateBeliefs
+      tags: [cognitive]
+      summary: List intermediate beliefs — rules, assumptions, attitudes (Layer 2)
+      responses:
+        "200":
+          description: List of intermediate beliefs ordered by confidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IntermediateBelief"
+
+  /cognitive/core-schemas:
+    get:
+      operationId: listCoreSchemas
+      tags: [cognitive]
+      summary: List core schemas — helpless / unlovable / worthless (Layer 3)
+      responses:
+        "200":
+          description: List of core schemas ordered by confidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoreSchema"
 
   /openai/conversations:
     get:
@@ -337,6 +442,11 @@ components:
           type: ["string", "null"]
         thoughtText:
           type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        processedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -354,8 +464,130 @@ components:
           type: string
         thoughtText:
           type: string
+        source:
+          type: string
       required:
         - type
+
+    TelemetryBatchInput:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetryEventInput"
+      required:
+        - events
+
+    AutomaticThought:
+      type: object
+      properties:
+        id:
+          type: integer
+        situation:
+          type: ["string", "null"]
+        thoughtText:
+          type: string
+        emotion:
+          type: ["string", "null"]
+        intensityPct:
+          type: ["integer", "null"]
+        distortionTags:
+          type: array
+          items:
+            type: string
+        telemetryEventId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - thoughtText
+        - distortionTags
+        - createdAt
+
+    IntermediateBelief:
+      type: object
+      properties:
+        id:
+          type: integer
+        beliefText:
+          type: string
+        category:
+          type: string
+        confidence:
+          type: integer
+        evidenceCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - beliefText
+        - category
+        - confidence
+        - evidenceCount
+        - createdAt
+        - updatedAt
+
+    CoreSchema:
+      type: object
+      properties:
+        id:
+          type: integer
+        schemaText:
+          type: string
+        domain:
+          type: string
+        confidence:
+          type: integer
+        evidenceCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - schemaText
+        - domain
+        - confidence
+        - evidenceCount
+        - createdAt
+        - updatedAt
+
+    CognitiveMindMap:
+      type: object
+      properties:
+        automaticThoughts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomaticThought"
+        intermediateBeliefs:
+          type: array
+          items:
+            $ref: "#/components/schemas/IntermediateBelief"
+        coreSchemas:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoreSchema"
+        unprocessedCount:
+          type: integer
+        lastAnalyzedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - automaticThoughts
+        - intermediateBeliefs
+        - coreSchemas
+        - unprocessedCount
 
     Belief:
       type: object

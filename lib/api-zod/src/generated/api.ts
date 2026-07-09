@@ -32,6 +32,8 @@ export const ListTelemetryResponseItem = zod.object({
   "type": zod.string(),
   "mood": zod.string().nullish(),
   "thoughtText": zod.string().nullish(),
+  "source": zod.string().nullish(),
+  "processedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListTelemetryResponse = zod.array(ListTelemetryResponseItem)
@@ -43,7 +45,8 @@ export const ListTelemetryResponse = zod.array(ListTelemetryResponseItem)
 export const CreateTelemetryBody = zod.object({
   "type": zod.string(),
   "mood": zod.string().optional(),
-  "thoughtText": zod.string().optional()
+  "thoughtText": zod.string().optional(),
+  "source": zod.string().optional()
 })
 
 export const CreateTelemetryResponse = zod.object({
@@ -51,8 +54,34 @@ export const CreateTelemetryResponse = zod.object({
   "type": zod.string(),
   "mood": zod.string().nullish(),
   "thoughtText": zod.string().nullish(),
+  "source": zod.string().nullish(),
+  "processedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Ingest a batch of telemetry events (e.g. a burst from NotificationListenerService)
+ */
+export const CreateTelemetryBatchBody = zod.object({
+  "events": zod.array(zod.object({
+  "type": zod.string(),
+  "mood": zod.string().optional(),
+  "thoughtText": zod.string().optional(),
+  "source": zod.string().optional()
+}))
+})
+
+export const CreateTelemetryBatchResponseItem = zod.object({
+  "id": zod.number(),
+  "type": zod.string(),
+  "mood": zod.string().nullish(),
+  "thoughtText": zod.string().nullish(),
+  "source": zod.string().nullish(),
+  "processedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const CreateTelemetryBatchResponse = zod.array(CreateTelemetryBatchResponseItem)
 
 
 /**
@@ -181,6 +210,133 @@ export const AnalyzePatternsResponseItem = zod.object({
   "updatedAt": zod.coerce.date()
 })
 export const AnalyzePatternsResponse = zod.array(AnalyzePatternsResponseItem)
+
+
+/**
+ * Extracts automatic thoughts with distortion tags, synthesizes intermediate beliefs (rules/assumptions/attitudes), and infers core schemas (helpless/unlovable/worthless). Idempotent — re-running deepens confidence and evidence counts rather than creating duplicates.
+ * @summary Run the layered cognitive engine on all unprocessed telemetry
+ */
+export const AnalyzeCognitiveResponse = zod.object({
+  "automaticThoughts": zod.array(zod.object({
+  "id": zod.number(),
+  "situation": zod.string().nullish(),
+  "thoughtText": zod.string(),
+  "emotion": zod.string().nullish(),
+  "intensityPct": zod.number().nullish(),
+  "distortionTags": zod.array(zod.string()),
+  "telemetryEventId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "intermediateBeliefs": zod.array(zod.object({
+  "id": zod.number(),
+  "beliefText": zod.string(),
+  "category": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "coreSchemas": zod.array(zod.object({
+  "id": zod.number(),
+  "schemaText": zod.string(),
+  "domain": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "unprocessedCount": zod.number(),
+  "lastAnalyzedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Get the full four-layer cognitive conceptualization
+ */
+export const GetCognitiveMapResponse = zod.object({
+  "automaticThoughts": zod.array(zod.object({
+  "id": zod.number(),
+  "situation": zod.string().nullish(),
+  "thoughtText": zod.string(),
+  "emotion": zod.string().nullish(),
+  "intensityPct": zod.number().nullish(),
+  "distortionTags": zod.array(zod.string()),
+  "telemetryEventId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "intermediateBeliefs": zod.array(zod.object({
+  "id": zod.number(),
+  "beliefText": zod.string(),
+  "category": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "coreSchemas": zod.array(zod.object({
+  "id": zod.number(),
+  "schemaText": zod.string(),
+  "domain": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "unprocessedCount": zod.number(),
+  "lastAnalyzedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary List extracted automatic thoughts (Layer 1)
+ */
+export const listAutomaticThoughtsQueryLimitDefault = 50;
+
+export const ListAutomaticThoughtsQueryParams = zod.object({
+  "limit": zod.coerce.number().default(listAutomaticThoughtsQueryLimitDefault)
+})
+
+export const ListAutomaticThoughtsResponseItem = zod.object({
+  "id": zod.number(),
+  "situation": zod.string().nullish(),
+  "thoughtText": zod.string(),
+  "emotion": zod.string().nullish(),
+  "intensityPct": zod.number().nullish(),
+  "distortionTags": zod.array(zod.string()),
+  "telemetryEventId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAutomaticThoughtsResponse = zod.array(ListAutomaticThoughtsResponseItem)
+
+
+/**
+ * @summary List intermediate beliefs — rules, assumptions, attitudes (Layer 2)
+ */
+export const ListIntermediateBeliefsResponseItem = zod.object({
+  "id": zod.number(),
+  "beliefText": zod.string(),
+  "category": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListIntermediateBeliefsResponse = zod.array(ListIntermediateBeliefsResponseItem)
+
+
+/**
+ * @summary List core schemas — helpless / unlovable / worthless (Layer 3)
+ */
+export const ListCoreSchemasResponseItem = zod.object({
+  "id": zod.number(),
+  "schemaText": zod.string(),
+  "domain": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListCoreSchemasResponse = zod.array(ListCoreSchemasResponseItem)
 
 
 /**

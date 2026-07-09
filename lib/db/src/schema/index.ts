@@ -2,3 +2,6 @@ export * from "./telemetry_events";
 export * from "./beliefs";
 export * from "./conversations";
 export * from "./messages";
+export * from "./automatic_thoughts";
+export * from "./intermediate_beliefs";
+export * from "./core_schemas";

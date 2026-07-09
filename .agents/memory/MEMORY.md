@@ -1,0 +1,4 @@
+- [Cognitive engine design](cognitive-engine.md) — 3-pass LLM pipeline; Pass 2+3 always run even with no new content; all unprocessed events marked regardless of thoughtText
+- [DeepSeek via OpenAI client](deepseek-setup.md) — use openai client from @workspace/integrations-openai-ai-server; model string "deepseek-ai/DeepSeek-V4-Pro"
+- [Zod v3 codegen constraint](zod-codegen.md) — bare `type: object` in OpenAPI spec generates zod.looseObject() which only exists in Zod v4; use specific schemas or omit bare object fields
+- [Native capture bridge contract](native-capture-contract.md) — all native imports must be lazy+Platform.OS-guarded; NativeCaptureModule at modules/native-capture/NativeCaptureModule.ts

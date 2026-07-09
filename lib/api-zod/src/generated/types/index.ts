@@ -7,11 +7,16 @@
  */
 
 export * from './apiError';
+export * from './automaticThought';
 export * from './belief';
 export * from './beliefInput';
 export * from './beliefTypeCount';
 export * from './beliefUpdate';
+export * from './cognitiveMindMap';
+export * from './coreSchema';
 export * from './healthStatus';
+export * from './intermediateBelief';
+export * from './listAutomaticThoughtsParams';
 export * from './listBeliefsParams';
 export * from './listTelemetryParams';
 export * from './openaiConversation';
@@ -20,5 +25,6 @@ export * from './openaiConversationWithMessages';
 export * from './openaiMessage';
 export * from './openaiMessageInput';
 export * from './patternSummary';
+export * from './telemetryBatchInput';
 export * from './telemetryEvent';
 export * from './telemetryEventInput';

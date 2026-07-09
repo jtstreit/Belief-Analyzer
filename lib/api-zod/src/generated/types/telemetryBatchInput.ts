@@ -5,10 +5,8 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TelemetryEventInput } from './telemetryEventInput';
 
-export interface TelemetryEventInput {
-  type: string;
-  mood?: string;
-  thoughtText?: string;
-  source?: string;
+export interface TelemetryBatchInput {
+  events: TelemetryEventInput[];
 }

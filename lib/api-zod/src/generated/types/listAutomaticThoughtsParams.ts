@@ -6,9 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface TelemetryEventInput {
-  type: string;
-  mood?: string;
-  thoughtText?: string;
-  source?: string;
-}
+export type ListAutomaticThoughtsParams = {
+limit?: number;
+};

@@ -147,7 +147,11 @@ function SudsStep({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ExerciseScreen() {
-  const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
+  const { exerciseId, returnConvId, returnModality } = useLocalSearchParams<{
+    exerciseId: string;
+    returnConvId?: string;
+    returnModality?: string;
+  }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -254,6 +258,34 @@ export default function ExerciseScreen() {
 
   // ── Completed screen ────────────────────────────────────────────────────────
   if (completed) {
+    const buildExerciseContext = () => {
+      const lines: string[] = [`I just completed the **${exercise.title}** exercise.`];
+      for (const step of exercise.steps) {
+        const val = answers[step.id];
+        if (val !== undefined && step.type !== 'info') {
+          lines.push(`**${step.title}:** ${val}`);
+        }
+      }
+      if (moodBefore !== null) lines.push(`**Mood before:** ${moodBefore}/10`);
+      if (moodAfterVal !== null) lines.push(`**Mood after:** ${moodAfterVal}/10`);
+      return lines.join('\n');
+    };
+
+    const handleFinish = async (returnToCoach: boolean) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (sessionId && moodAfterVal !== null) {
+        await updateSession.mutateAsync({ id: sessionId, data: { moodAfter: moodAfterVal } });
+      }
+      if (returnToCoach && returnConvId) {
+        const ctx = encodeURIComponent(buildExerciseContext());
+        router.replace(
+          `/coach-session/${returnConvId}?modality=${returnModality ?? modality}&exerciseContext=${ctx}` as any
+        );
+      } else {
+        router.back();
+      }
+    };
+
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
@@ -289,29 +321,51 @@ export default function ExerciseScreen() {
                 </Text>
               </Animated.View>
             )}
-            <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: activeColor }]}
-              onPress={async () => {
-                if (sessionId && moodAfterVal !== null) {
-                  await updateSession.mutateAsync({
-                    id: sessionId,
-                    data: { moodAfter: moodAfterVal },
-                  });
-                }
-                router.back();
-              }}
-            >
-              <Text style={styles.primaryBtnText}>Done</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.ghostBtn}
-              onPress={() => router.push('/coach' as any)}
-            >
-              <Feather name="message-circle" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>
-                Discuss with coach
-              </Text>
-            </TouchableOpacity>
+            {returnConvId ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: activeColor }]}
+                  onPress={() => handleFinish(true)}
+                >
+                  {updateSession.isPending ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <>
+                      <Feather name="message-circle" size={16} color="#000" />
+                      <Text style={styles.primaryBtnText}>Return to Coach</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.ghostBtn}
+                  onPress={() => handleFinish(false)}
+                >
+                  <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>Done</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: activeColor }]}
+                  onPress={() => handleFinish(false)}
+                >
+                  {updateSession.isPending ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Done</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.ghostBtn}
+                  onPress={() => router.push('/coach' as any)}
+                >
+                  <Feather name="message-circle" size={16} color={colors.mutedForeground} />
+                  <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>
+                    Discuss with coach
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </Animated.View>
         </ScrollView>
       </View>

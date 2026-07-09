@@ -10,6 +10,37 @@ import {
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────
+// Exercise catalog — keyword detection for recommendations
+// ─────────────────────────────────────────────────────────────
+const EXERCISE_KEYWORD_MAP: { id: string; title: string; keywords: string[] }[] = [
+  { id: 'rebt-abcde', title: 'ABCDE Worksheet', keywords: ['abcde worksheet', 'abcde'] },
+  { id: 'rebt-shame-attacking', title: 'Shame-Attacking Exercise', keywords: ['shame-attacking exercise', 'shame attacking exercise', 'shame-attacking'] },
+  { id: 'rebt-rational-imagery', title: 'Rational-Emotive Imagery', keywords: ['rational-emotive imagery', 'rational emotive imagery'] },
+  { id: 'rebt-rational-cards', title: 'Rational Coping Cards', keywords: ['rational coping cards', 'coping cards'] },
+  { id: 'cbt-thought-record-7col', title: '7-Column Thought Record', keywords: ['7-column thought record', '7 column thought record', 'thought record'] },
+  { id: 'cbt-triple-column', title: 'Triple Column Technique', keywords: ['triple column technique', 'triple column'] },
+  { id: 'cbt-downward-arrow', title: 'Downward Arrow', keywords: ['downward arrow'] },
+  { id: 'cbt-behavioral-experiment', title: 'Behavioral Experiment', keywords: ['behavioral experiment', 'behavioural experiment'] },
+  { id: 'beh-activation', title: 'Behavioral Activation', keywords: ['behavioral activation', 'behavioural activation'] },
+  { id: 'beh-exposure-hierarchy', title: 'Fear Hierarchy Builder', keywords: ['exposure hierarchy', 'fear hierarchy', 'fear hierarchy builder'] },
+  { id: 'beh-exposure-session', title: 'Graded Exposure Session', keywords: ['graded exposure session', 'graded exposure', 'exposure session'] },
+  { id: 'beh-problem-solving', title: 'Problem Solving', keywords: ['problem-solving exercise', 'problem solving exercise'] },
+  { id: 'beh-worry-postponement', title: 'Worry Postponement', keywords: ['worry postponement'] },
+];
+
+function detectRecommendedExercise(text: string): { id: string; title: string } | null {
+  const lower = text.toLowerCase();
+  for (const exercise of EXERCISE_KEYWORD_MAP) {
+    for (const kw of exercise.keywords) {
+      if (lower.includes(kw)) {
+        return { id: exercise.id, title: exercise.title };
+      }
+    }
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────
 // REBT system prompt — Ellis's ABC(DE) model
 // ─────────────────────────────────────────────────────────────
 const REBT_SYSTEM_PROMPT = `You are a warm, skilled REBT (Rational Emotive Behavior Therapy) coach named Vera, trained in Albert Ellis's model.
@@ -383,6 +414,12 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       role: "assistant",
       content: fullResponse,
     });
+
+    // Detect if Vera recommended an exercise and emit it as a structured event
+    const recommendedExercise = detectRecommendedExercise(fullResponse);
+    if (recommendedExercise) {
+      res.write(`data: ${JSON.stringify({ recommendedExercise })}\n\n`);
+    }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();

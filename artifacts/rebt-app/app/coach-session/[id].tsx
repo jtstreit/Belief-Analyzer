@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGetOpenaiConversation } from '@workspace/api-client-react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { fetch as expoFetch } from 'expo/fetch';
@@ -13,6 +13,7 @@ import Animated, {
   useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { useModality } from '@/contexts/ModalityContext';
+import { getExerciseById } from '@/constants/exercises';
 
 const TypingDot = ({ delay }: { delay: number }) => {
   const translateY = useSharedValue(0);
@@ -34,8 +35,69 @@ const TypingIndicator = () => (
   </View>
 );
 
+interface RecommendedExercise {
+  id: string;
+  title: string;
+}
+
+function ExerciseRecommendationCard({
+  exercise,
+  convId,
+  modality,
+  activeColor,
+  colors,
+  onDismiss,
+}: {
+  exercise: RecommendedExercise;
+  convId: number;
+  modality: string;
+  activeColor: string;
+  colors: any;
+  onDismiss: () => void;
+}) {
+  const router = useRouter();
+  const exerciseMeta = getExerciseById(exercise.id);
+  const minutes = exerciseMeta?.estimatedMinutes ?? null;
+
+  return (
+    <Animated.View entering={SlideInUp.springify().damping(18)} style={[styles.recCard, { backgroundColor: colors.card, borderColor: activeColor + '55' }]}>
+      <View style={[styles.recCardAccent, { backgroundColor: activeColor }]} />
+      <View style={styles.recCardBody}>
+        <View style={[styles.recIconBox, { backgroundColor: activeColor + '22' }]}>
+          <Feather name={exerciseMeta?.icon as any ?? 'activity'} size={20} color={activeColor} />
+        </View>
+        <View style={styles.recCardText}>
+          <Text style={[styles.recLabel, { color: colors.mutedForeground }]}>Vera recommends</Text>
+          <Text style={[styles.recTitle, { color: colors.foreground }]}>{exercise.title}</Text>
+          {minutes && (
+            <Text style={[styles.recMeta, { color: colors.mutedForeground }]}>~{minutes} min</Text>
+          )}
+        </View>
+        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <Feather name="x" size={16} color={colors.mutedForeground} />
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity
+        style={[styles.recStartBtn, { backgroundColor: activeColor }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.push(`/exercise/${exercise.id}?returnConvId=${convId}&returnModality=${modality}` as any);
+          onDismiss();
+        }}
+      >
+        <Feather name="play" size={14} color="#000" />
+        <Text style={styles.recStartBtnText}>Start Exercise</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function CoachSessionScreen() {
-  const { id, modality: modalityParam } = useLocalSearchParams<{ id: string; modality?: string }>();
+  const { id, modality: modalityParam, exerciseContext: exerciseContextParam } = useLocalSearchParams<{
+    id: string;
+    modality?: string;
+    exerciseContext?: string;
+  }>();
   const convId = parseInt(id, 10);
 
   const colors = useColors();
@@ -50,6 +112,10 @@ export default function CoachSessionScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState('');
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [recommendedExercise, setRecommendedExercise] = useState<RecommendedExercise | null>(null);
+
+  // exerciseContext from exercise completion — attach to next outgoing message
+  const pendingExerciseContextRef = useRef<string | null>(null);
 
   const { data: conversation, isLoading } = useGetOpenaiConversation(convId);
   const flatListRef = useRef<FlatList>(null);
@@ -60,12 +126,25 @@ export default function CoachSessionScreen() {
     }
   }, [conversation]);
 
+  // Pre-fill input with exercise summary when returning from an exercise
+  useEffect(() => {
+    if (exerciseContextParam) {
+      const decoded = decodeURIComponent(exerciseContextParam);
+      setInputText(decoded);
+      pendingExerciseContextRef.current = decoded;
+    }
+  }, [exerciseContextParam]);
+
   const handleSend = async () => {
     if (!inputText.trim()) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRecommendedExercise(null);
 
     const textToSend = inputText.trim();
+    const exerciseContext = pendingExerciseContextRef.current;
+    pendingExerciseContextRef.current = null;
+
     const userMessage = {
       id: Date.now(),
       role: 'user',
@@ -85,7 +164,11 @@ export default function CoachSessionScreen() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: textToSend, modality }),
+          body: JSON.stringify({
+            content: textToSend,
+            modality,
+            ...(exerciseContext ? { exerciseContext } : {}),
+          }),
           // @ts-ignore
           reactNative: { textStreaming: true },
         },
@@ -112,6 +195,9 @@ export default function CoachSessionScreen() {
               if (json.content) {
                 currentStream += json.content;
                 setStreamedContent(currentStream);
+              }
+              if (json.recommendedExercise) {
+                setRecommendedExercise(json.recommendedExercise);
               }
             } catch { /* ignore parse errors */ }
           }
@@ -219,33 +305,45 @@ export default function CoachSessionScreen() {
         inverted
         contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
         ListHeaderComponent={
-          isStreaming ? (
-            <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.messageContainer, styles.messageAssistant]}>
-              <View style={[
-                styles.messageBubble,
-                {
-                  backgroundColor: colors.card,
-                  borderLeftWidth: 4,
-                  borderLeftColor: activeColor,
-                  shadowColor: activeColor,
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  shadowOffset: { width: -2, height: 0 },
-                  elevation: 4,
-                },
-              ]}>
-                {streamedContent ? (
-                  <Animated.View entering={FadeIn.duration(300)}>
-                    <Text style={[styles.messageText, { color: colors.cardForeground }]}>
-                      {renderBoldText(streamedContent)}
-                    </Text>
-                  </Animated.View>
-                ) : (
-                  <TypingIndicator />
-                )}
-              </View>
-            </Animated.View>
-          ) : null
+          <>
+            {isStreaming ? (
+              <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.messageContainer, styles.messageAssistant]}>
+                <View style={[
+                  styles.messageBubble,
+                  {
+                    backgroundColor: colors.card,
+                    borderLeftWidth: 4,
+                    borderLeftColor: activeColor,
+                    shadowColor: activeColor,
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    shadowOffset: { width: -2, height: 0 },
+                    elevation: 4,
+                  },
+                ]}>
+                  {streamedContent ? (
+                    <Animated.View entering={FadeIn.duration(300)}>
+                      <Text style={[styles.messageText, { color: colors.cardForeground }]}>
+                        {renderBoldText(streamedContent)}
+                      </Text>
+                    </Animated.View>
+                  ) : (
+                    <TypingIndicator />
+                  )}
+                </View>
+              </Animated.View>
+            ) : null}
+            {!isStreaming && recommendedExercise ? (
+              <ExerciseRecommendationCard
+                exercise={recommendedExercise}
+                convId={convId}
+                modality={modality}
+                activeColor={activeColor}
+                colors={colors}
+                onDismiss={() => setRecommendedExercise(null)}
+              />
+            ) : null}
+          </>
         }
       />
 
@@ -303,4 +401,23 @@ const styles = StyleSheet.create({
   },
   sendButtonWrapper: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', paddingBottom: 4 },
   sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  // Recommendation card
+  recCard: {
+    marginBottom: 16, borderRadius: 18, borderWidth: 1.5, overflow: 'hidden',
+  },
+  recCardAccent: { height: 3, width: '100%' },
+  recCardBody: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+  },
+  recIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  recCardText: { flex: 1, gap: 2 },
+  recLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
+  recTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  recMeta: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  recStartBtn: {
+    marginHorizontal: 16, marginBottom: 14, borderRadius: 14,
+    paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
+  recStartBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#000' },
 });

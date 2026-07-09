@@ -164,29 +164,29 @@ export default function ProgressScreen() {
   const { data, isLoading, refetch } = useGetProgress();
 
   const accentColor  = colors.accent;
-  const cbtColor     = (colors as any).cbt  as string;
-  const successColor = (colors as any).success as string;
+  const cbtColor     = colors.cbt;
+  const successColor = colors.success;
 
   const MODALITY_COLORS: Record<string, string> = {
     rebt: accentColor,
     cbt:  cbtColor,
   };
 
-  const modalityBars: BarDatum[] = ((data as any)?.exercisesByModality ?? []).map((m: any) => ({
+  const modalityBars: BarDatum[] = (data?.exercisesByModality ?? []).map((m) => ({
     label: m.modality.toUpperCase(),
     value: m.count,
-    color: MODALITY_COLORS[m.modality as string] ?? colors.mutedForeground,
+    color: MODALITY_COLORS[m.modality] ?? colors.mutedForeground,
   }));
 
   const typeColors = [successColor, cbtColor, '#C45E5E', '#4A8A9E', accentColor, '#7B6EAD'];
-  const typeBars: BarDatum[] = ((data as any)?.exercisesByType ?? []).slice(0, 6).map((t: any, i: number) => ({
+  const typeBars: BarDatum[] = (data?.exercisesByType ?? []).slice(0, 6).map((t, i) => ({
     label: t.exerciseId.replace(/-/g, ' '),
     value: t.count,
     color: typeColors[i % typeColors.length]!,
   }));
 
-  const maxModality = Math.max(...((data as any)?.exercisesByModality ?? []).map((m: any) => m.count as number), 1);
-  const maxType     = Math.max(...((data as any)?.exercisesByType ?? []).map((t: any) => t.count as number), 1);
+  const maxModality = Math.max(...(data?.exercisesByModality ?? []).map((m) => m.count), 1);
+  const maxType     = Math.max(...(data?.exercisesByType ?? []).map((t) => t.count), 1);
   const chartWidth  = 340;
 
   if (isLoading) {

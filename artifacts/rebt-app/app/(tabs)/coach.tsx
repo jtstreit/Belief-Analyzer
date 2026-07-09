@@ -20,7 +20,7 @@ export default function CoachScreen() {
   const router = useRouter();
   const { modality } = useModality();
 
-  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
+  const activeColor = modality === 'rebt' ? colors.accent : colors.cbt;
   const modalityLabel = MODALITY_LABELS[modality];
 
   const { data: conversations, isLoading, refetch } = useListOpenaiConversations();

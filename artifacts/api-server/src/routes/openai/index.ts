@@ -232,7 +232,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
 
     let fullResponse = "";
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "deepseek-chat",
       max_completion_tokens: 1024,
       messages: [
         { role: "system", content: REBT_SYSTEM_PROMPT },

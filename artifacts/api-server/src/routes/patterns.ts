@@ -97,7 +97,7 @@ For each irrational belief found, respond with a JSON array. Each item should ha
 Return ONLY a valid JSON array, no markdown, no explanation.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "deepseek-chat",
       max_completion_tokens: 2000,
       messages: [
         { role: "system", content: systemPrompt },

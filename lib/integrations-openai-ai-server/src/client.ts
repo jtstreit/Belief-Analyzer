@@ -5,7 +5,7 @@ const apiKey =
   process.env.OPENAI_API_KEY;
 
 const baseURL =
-  process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+  process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? "https://api.deepseek.com/v1";
 
 if (!apiKey) {
   throw new Error(

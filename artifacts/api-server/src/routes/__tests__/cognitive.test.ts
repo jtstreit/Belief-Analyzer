@@ -34,6 +34,8 @@ const state = vi.hoisted(() => ({
   processedEventIds: [] as number[],
   // Capture sink for onConflictDoUpdate calls: records conflict target + set payload
   conflictUpserts: [] as Array<{ table: object; target: unknown; set: unknown }>,
+  // Capture sink for db.delete().where().returning() calls
+  deleted: [] as Array<{ table: object; returning: unknown[] }>,
   // Controls whether transaction rolls back (simulates DB failure)
   txShouldThrow: false,
 }));
@@ -109,6 +111,19 @@ vi.mock("@workspace/db", () => {
       },
     })),
 
+    delete: vi.fn((table: object) => {
+      // Record which table is being deleted from; returning() resolves to []
+      // by default (no rows deleted) so the pruning pass succeeds without
+      // touching real DB state.
+      const entry = { table, returning: [] as unknown[] };
+      state.deleted.push(entry);
+      return {
+        where: (_cond: unknown) => ({
+          returning: (_fields?: unknown) => Promise.resolve(entry.returning),
+        }),
+      };
+    }),
+
     transaction: vi.fn(async (cb: (tx: unknown) => Promise<void>) => {
       if (state.txShouldThrow) throw new Error("DB transaction failed");
       const tx = {
@@ -153,6 +168,9 @@ vi.mock("@workspace/db", () => {
     inArray: vi.fn((col: unknown, ids: unknown) => ({ op: "inArray", col, ids })),
     desc: vi.fn((col: unknown) => ({ op: "desc", col })),
     eq: vi.fn((col: unknown, val: unknown) => ({ op: "eq", col, val })),
+    and: vi.fn((...conds: unknown[]) => ({ op: "and", conds })),
+    lt: vi.fn((col: unknown, val: unknown) => ({ op: "lt", col, val })),
+    lte: vi.fn((col: unknown, val: unknown) => ({ op: "lte", col, val })),
     sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
       op: "sql",
       strings,
@@ -230,6 +248,7 @@ function resetState() {
   state.updated.length = 0;
   state.processedEventIds.length = 0;
   state.conflictUpserts.length = 0;
+  state.deleted.length = 0;
   state.txShouldThrow = false;
 
   // Default: empty DB
@@ -752,6 +771,44 @@ describe("POST /api/cognitive/analyze", () => {
         (t: { telemetryEventId: unknown }) => t.telemetryEventId === null,
       ),
     ).toBe(true);
+  });
+
+  // ── Maintenance pruning pass ──────────────────────────────────────────────
+  describe("maintenance pruning pass", () => {
+    it("returns 200 even when prunable records exist (pruning is non-fatal)", async () => {
+      // No unprocessed events, no thoughts → Passes 1-3 are no-ops.
+      // The pruning pass will call db.delete twice; mock resolves to [].
+      const res = await agent.post("/api/cognitive/analyze");
+      expect(res.status).toBe(200);
+    });
+
+    it("calls db.delete for both intermediateBeliefsCogTable and coreSchemasTable", async () => {
+      const { db } = await import("@workspace/db");
+      const deleteSpy = db.delete as ReturnType<typeof vi.fn>;
+
+      await agent.post("/api/cognitive/analyze");
+
+      // Should have been called exactly twice — once per table
+      const deletedTables = deleteSpy.mock.calls.map(
+        ([table]: [object]) => table,
+      );
+      expect(deletedTables).toContain(sentinels.intermediateBeliefsCogTable);
+      expect(deletedTables).toContain(sentinels.coreSchemasTable);
+    });
+
+    it("response shape is unchanged after pruning (map fields all present)", async () => {
+      state.byTable.set(sentinels.automaticThoughtsTable, [makeThoughtRow(1)]);
+      state.byTable.set(sentinels.intermediateBeliefsCogTable, [makeBeliefRow(1)]);
+
+      const res = await agent.post("/api/cognitive/analyze");
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        automaticThoughts: expect.any(Array),
+        intermediateBeliefs: expect.any(Array),
+        coreSchemas: expect.any(Array),
+        unprocessedCount: expect.any(Number),
+      });
+    });
   });
 
   // ── GET /cognitive/map returns the current mind map ───────────────────────

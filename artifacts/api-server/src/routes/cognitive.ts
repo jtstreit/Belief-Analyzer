@@ -6,7 +6,7 @@ import {
   intermediateBeliefsCogTable,
   coreSchemasTable,
 } from "@workspace/db";
-import { isNull, inArray, desc, eq, sql } from "drizzle-orm";
+import { isNull, inArray, desc, eq, sql, and, lt, lte } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
@@ -422,6 +422,47 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
             });
         }
       }
+    }
+
+    // ── Maintenance pass: prune stale low-evidence entries ───────────
+    // Removes intermediate beliefs and core schemas that have never been
+    // confirmed by more than one analysis run, have very low confidence,
+    // and haven't been updated in over 30 days. These are almost certainly
+    // artefacts of a one-off session that no longer reflect the user's
+    // current patterns.
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [prunedBeliefs, prunedSchemas] = await Promise.all([
+      db
+        .delete(intermediateBeliefsCogTable)
+        .where(
+          and(
+            lte(intermediateBeliefsCogTable.evidenceCount, 1),
+            lt(intermediateBeliefsCogTable.confidence, 20),
+            lt(intermediateBeliefsCogTable.updatedAt, thirtyDaysAgo),
+          ),
+        )
+        .returning({ id: intermediateBeliefsCogTable.id }),
+      db
+        .delete(coreSchemasTable)
+        .where(
+          and(
+            lte(coreSchemasTable.evidenceCount, 1),
+            lt(coreSchemasTable.confidence, 15),
+            lt(coreSchemasTable.updatedAt, thirtyDaysAgo),
+          ),
+        )
+        .returning({ id: coreSchemasTable.id }),
+    ]);
+
+    if (prunedBeliefs.length > 0 || prunedSchemas.length > 0) {
+      req.log.info(
+        {
+          prunedBeliefIds: prunedBeliefs.map((b) => b.id),
+          prunedSchemaIds: prunedSchemas.map((s) => s.id),
+        },
+        `Pruned ${prunedBeliefs.length} stale intermediate belief(s) and ${prunedSchemas.length} stale core schema(s)`,
+      );
     }
 
     res.json(await buildMindMap());

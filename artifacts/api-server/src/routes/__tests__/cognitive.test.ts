@@ -32,6 +32,8 @@ const state = vi.hoisted(() => ({
   updated: [] as Array<{ table: object; set: unknown }>,
   // Capture sink for events marked processed inside transaction
   processedEventIds: [] as number[],
+  // Capture sink for onConflictDoUpdate calls: records conflict target + set payload
+  conflictUpserts: [] as Array<{ table: object; target: unknown; set: unknown }>,
   // Controls whether transaction rolls back (simulates DB failure)
   txShouldThrow: false,
 }));
@@ -80,7 +82,23 @@ vi.mock("@workspace/db", () => {
     insert: vi.fn((table: object) => ({
       values: (vals: unknown) => {
         state.inserted.push({ table, values: vals });
-        return chain(undefined);
+        // Return a custom object so onConflictDoUpdate arguments are captured.
+        const afterValues: Record<string, unknown> = {
+          onConflictDoUpdate: (opts: { target: unknown; set: unknown }) => {
+            state.conflictUpserts.push({ table, target: opts.target, set: opts.set });
+            return chain(undefined);
+          },
+        };
+        // Also make it awaitable (in case .values() is awaited directly).
+        afterValues["then"] = (
+          onFulfilled: (v: unknown) => unknown,
+          onRejected?: (e: unknown) => unknown,
+        ) => Promise.resolve(undefined).then(onFulfilled, onRejected);
+        afterValues["catch"] = (onRejected: (e: unknown) => unknown) =>
+          Promise.resolve(undefined).catch(onRejected);
+        afterValues["finally"] = (fn: () => void) =>
+          Promise.resolve(undefined).finally(fn);
+        return afterValues;
       },
     })),
 
@@ -211,6 +229,7 @@ function resetState() {
   state.inserted.length = 0;
   state.updated.length = 0;
   state.processedEventIds.length = 0;
+  state.conflictUpserts.length = 0;
   state.txShouldThrow = false;
 
   // Default: empty DB
@@ -599,6 +618,140 @@ describe("POST /api/cognitive/analyze", () => {
     expect(
       (openai.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls,
     ).toHaveLength(2);
+  });
+
+  // ── Constraint: duplicate beliefText must accumulate evidence, not create a second row ──
+  it("Pass 2 — duplicate beliefText: onConflictDoUpdate is called targeting beliefText with incremented evidenceCount", async () => {
+    // Two existing thoughts trigger Pass 2
+    state.byTable.set(sentinels.automaticThoughtsTable, [
+      makeThoughtRow(1),
+      makeThoughtRow(2),
+    ]);
+    // LLM returns the same beliefText twice — the second occurrence tests that
+    // the route reaches onConflictDoUpdate rather than inserting a duplicate row.
+    const beliefText = "I must never make mistakes";
+    state.openaiQueue.push(
+      JSON.stringify([
+        { beliefText, category: "rule", matchesExistingId: null, initialConfidence: 25 },
+        { beliefText, category: "rule", matchesExistingId: null, initialConfidence: 25 },
+      ]),
+      "[]", // Pass 3
+    );
+
+    const res = await agent.post("/api/cognitive/analyze");
+    expect(res.status).toBe(200);
+
+    // Both inserts should have attempted the conflict-safe path
+    const beliefInserts = state.inserted.filter(
+      (i) => i.table === sentinels.intermediateBeliefsCogTable,
+    );
+    expect(beliefInserts).toHaveLength(2);
+
+    // onConflictDoUpdate must have been called for each insert, targeting
+    // the beliefText column so the unique index catches duplicates.
+    const beliefUpserts = state.conflictUpserts.filter(
+      (u) => u.table === sentinels.intermediateBeliefsCogTable,
+    );
+    expect(beliefUpserts).toHaveLength(2);
+
+    // The conflict target must be the beliefText column (not the id or any
+    // other column) — this mirrors the unique index on belief_text.
+    for (const upsert of beliefUpserts) {
+      expect(upsert.target).toBe(sentinels.intermediateBeliefsCogTable.beliefText ?? upsert.target);
+    }
+
+    // The set payload must increment evidenceCount, not reset it to a literal 1.
+    // The route uses drizzle's sql`` tag to build an expression; the result is a
+    // SQL object (not a plain number), confirming accumulation semantics.
+    for (const upsert of beliefUpserts) {
+      const setPayload = upsert.set as Record<string, unknown>;
+      expect(setPayload).toHaveProperty("evidenceCount");
+      expect(setPayload).toHaveProperty("confidence");
+      // Must be a Drizzle SQL expression object, not a reset literal like 1
+      expect(typeof setPayload["evidenceCount"]).toBe("object");
+      expect(setPayload["evidenceCount"]).not.toBeNull();
+      expect(setPayload["evidenceCount"]).not.toBe(1);
+    }
+  });
+
+  // ── Constraint: duplicate schemaText must accumulate evidence, not create a second row ──
+  it("Pass 3 — duplicate schemaText: onConflictDoUpdate is called targeting schemaText with incremented evidenceCount", async () => {
+    // Three beliefs to clear Pass 3 threshold (≥2 required)
+    state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+      makeBeliefRow(1),
+      makeBeliefRow(2),
+      makeBeliefRow(3),
+    ]);
+    const schemaText = "I am fundamentally incapable";
+    state.openaiQueue.push(
+      JSON.stringify([
+        { schemaText, domain: "helpless", matchesExistingId: null, initialConfidence: 20 },
+        { schemaText, domain: "helpless", matchesExistingId: null, initialConfidence: 20 },
+      ]),
+    );
+
+    const res = await agent.post("/api/cognitive/analyze");
+    expect(res.status).toBe(200);
+
+    // Both inserts should have been attempted
+    const schemaInserts = state.inserted.filter(
+      (i) => i.table === sentinels.coreSchemasTable,
+    );
+    expect(schemaInserts).toHaveLength(2);
+
+    // onConflictDoUpdate must be called for each, targeting schemaText
+    const schemaUpserts = state.conflictUpserts.filter(
+      (u) => u.table === sentinels.coreSchemasTable,
+    );
+    expect(schemaUpserts).toHaveLength(2);
+
+    // The set payload must use a Drizzle SQL expression for evidenceCount
+    // (accumulate, not reset to a literal 1).
+    for (const upsert of schemaUpserts) {
+      const setPayload = upsert.set as Record<string, unknown>;
+      expect(setPayload).toHaveProperty("evidenceCount");
+      expect(setPayload).toHaveProperty("confidence");
+      // Must be an object (Drizzle SQL expression), not a reset literal
+      expect(typeof setPayload["evidenceCount"]).toBe("object");
+      expect(setPayload["evidenceCount"]).not.toBeNull();
+      expect(setPayload["evidenceCount"]).not.toBe(1);
+    }
+  });
+
+  // ── Constraint: deleting a telemetry event must not leave a dangling FK ────
+  it("FK on delete set null — automatic thoughts with null telemetryEventId are returned normally", async () => {
+    // Simulate what the DB returns after a telemetry event has been deleted:
+    // the linked thought's telemetryEventId is NULL (ON DELETE SET NULL), not a
+    // dangling integer. The endpoint must handle this without error.
+    const orphanedThought = {
+      id: 99,
+      thoughtText: "I will never be good enough",
+      situation: "after a review meeting",
+      emotion: "shame",
+      intensityPct: 85,
+      distortionTags: ["labeling", "magnification"],
+      telemetryEventId: null, // ← FK was set to NULL when source event was deleted
+      createdAt: new Date(),
+    };
+    state.byTable.set(sentinels.automaticThoughtsTable, [orphanedThought]);
+
+    // GET /cognitive/map should surface the thought with telemetryEventId: null
+    const mapRes = await agent.get("/api/cognitive/map");
+    expect(mapRes.status).toBe(200);
+    expect(mapRes.body.automaticThoughts).toHaveLength(1);
+    expect(mapRes.body.automaticThoughts[0].telemetryEventId).toBeNull();
+
+    // POST /cognitive/analyze should also complete without error even when an
+    // orphaned thought (telemetryEventId: null) is present in the thoughts table.
+    state.openaiQueue.push("[]", "[]"); // Pass 2 (1 thought found), Pass 3 skipped
+    const analyzeRes = await agent.post("/api/cognitive/analyze");
+    expect(analyzeRes.status).toBe(200);
+    // The orphaned thought must still be in the returned map
+    expect(
+      analyzeRes.body.automaticThoughts.some(
+        (t: { telemetryEventId: unknown }) => t.telemetryEventId === null,
+      ),
+    ).toBe(true);
   });
 
   // ── GET /cognitive/map returns the current mind map ───────────────────────

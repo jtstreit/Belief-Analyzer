@@ -13,7 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useModality } from '@/contexts/ModalityContext';
 import { getExerciseById, type ExerciseStep } from '@/constants/exercises';
-import { useCreateExerciseSession, useUpdateExerciseSession } from '@workspace/api-client-react';
+import { useCreateExerciseSession, useUpdateExerciseSession, useCreateOpenaiConversation } from '@workspace/api-client-react';
 
 // ─── Step input components ────────────────────────────────────────────────────
 
@@ -171,6 +171,7 @@ export default function ExerciseScreen() {
 
   const createSession = useCreateExerciseSession();
   const updateSession = useUpdateExerciseSession();
+  const createConversation = useCreateOpenaiConversation();
 
   const activeColor = modality === 'rebt' ? '#F59E0B' : '#6366F1';
 
@@ -357,12 +358,38 @@ export default function ExerciseScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.ghostBtn}
-                  onPress={() => router.push('/coach' as any)}
+                  disabled={createConversation.isPending}
+                  onPress={async () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    if (sessionId && moodAfterVal !== null) {
+                      await updateSession.mutateAsync({ id: sessionId, data: { moodAfter: moodAfterVal } });
+                    }
+                    try {
+                      const conv = await createConversation.mutateAsync({
+                        data: {
+                          title: `After ${exercise.title} — ${new Date().toLocaleDateString()}`,
+                          modality,
+                        },
+                      });
+                      const ctx = encodeURIComponent(buildExerciseContext());
+                      router.replace(
+                        `/coach-session/${conv.id}?modality=${modality}&exerciseContext=${ctx}` as any
+                      );
+                    } catch {
+                      router.push('/coach' as any);
+                    }
+                  }}
                 >
-                  <Feather name="message-circle" size={16} color={colors.mutedForeground} />
-                  <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>
-                    Discuss with coach
-                  </Text>
+                  {createConversation.isPending ? (
+                    <ActivityIndicator color={colors.mutedForeground} size="small" />
+                  ) : (
+                    <>
+                      <Feather name="message-circle" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>
+                        Discuss with coach
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </>
             )}

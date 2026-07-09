@@ -350,9 +350,26 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       .slice(0, 4)
       .map(m => `  - ${m.content.slice(0, 200).replace(/\n/g, " ")}…`);
 
-    const completedExerciseLines = recentExercises.map(s =>
-      `  - Completed "${s.exerciseId}" (${s.modality.toUpperCase()})${s.moodBefore != null && s.moodAfter != null ? `, mood ${s.moodBefore}→${s.moodAfter}/10` : ""}`
-    );
+    const completedExerciseLines = recentExercises.flatMap(s => {
+      const header = `  - Completed "${s.exerciseId}" (${s.modality.toUpperCase()})${s.moodBefore != null && s.moodAfter != null ? `, mood ${s.moodBefore}→${s.moodAfter}/10` : ""}`;
+      const stepLines: string[] = [];
+      if (s.stepData && typeof s.stepData === "object") {
+        const data = s.stepData as Record<string, string | number>;
+        for (const [key, value] of Object.entries(data)) {
+          if (typeof value === "string" && value.trim().length > 0) {
+            const label = key
+              .replace(/_/g, " ")
+              .replace(/([a-z])([A-Z])/g, "$1 $2")
+              .toLowerCase();
+            const excerpt = value.length > 300 ? value.slice(0, 300) + "…" : value;
+            stepLines.push(`      ${label}: "${excerpt}"`);
+          }
+        }
+      }
+      return stepLines.length > 0
+        ? [header, ...stepLines]
+        : [header];
+    });
 
     const memoryBlock = [
       "## Persistent User Memory",

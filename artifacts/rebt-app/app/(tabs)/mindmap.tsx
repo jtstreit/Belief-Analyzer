@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -21,12 +21,16 @@ import Animated, {
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// ─── Constants ─────────────────────────────────────────────────────────────
+const AUTO_ANALYSE_KEY = '@rebt/auto_analyse';
+const AUTO_ANALYSE_DEBOUNCE_MS = 1500;
 
 // ─── Distortion label map ──────────────────────────────────────────────────
 const DISTORTION_LABELS: Record<string, string> = {
@@ -112,6 +116,29 @@ export default function MindMapScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [autoAnalyse, setAutoAnalyse] = useState(true);
+  const autoAnalyseRef = useRef(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load persisted preference ──────────────────────────────────────────
+  useEffect(() => {
+    AsyncStorage.getItem(AUTO_ANALYSE_KEY).then((stored) => {
+      if (stored !== null) {
+        const val = stored === 'true';
+        setAutoAnalyse(val);
+        autoAnalyseRef.current = val;
+      }
+    });
+  }, []);
+
+  const toggleAutoAnalyse = useCallback(() => {
+    setAutoAnalyse((prev) => {
+      const next = !prev;
+      autoAnalyseRef.current = next;
+      AsyncStorage.setItem(AUTO_ANALYSE_KEY, String(next));
+      return next;
+    });
+  }, []);
 
   const {
     data: map,
@@ -124,6 +151,7 @@ export default function MindMapScreen() {
   const { mutateAsync: runAnalysis } = useAnalyzeCognitive();
 
   const handleAnalyze = useCallback(async () => {
+    if (isAnalyzing) return;
     setIsAnalyzing(true);
     try {
       await runAnalysis();
@@ -131,7 +159,28 @@ export default function MindMapScreen() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [runAnalysis, queryClient]);
+  }, [runAnalysis, queryClient, isAnalyzing]);
+
+  // ── Auto-trigger on focus ──────────────────────────────────────────────
+  // Fires whenever the tab is brought into focus. If auto-analyse is enabled
+  // and there are unprocessed events, kicks off analysis after a short debounce
+  // so rapid tab switches don't spawn duplicate requests.
+  useFocusEffect(
+    useCallback(() => {
+      const unprocessed = map?.unprocessedCount ?? 0;
+      if (!autoAnalyseRef.current || unprocessed === 0) return;
+
+      debounceTimer.current = setTimeout(() => {
+        // Re-check ref inside timer — user may have toggled off during debounce
+        if (!autoAnalyseRef.current) return;
+        handleAnalyze();
+      }, AUTO_ANALYSE_DEBOUNCE_MS);
+
+      return () => {
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      };
+    }, [map?.unprocessedCount, handleAnalyze]),
+  );
 
   // Derive distortion aggregate from automatic thoughts
   const distortionCounts = useMemo(() => {
@@ -157,19 +206,48 @@ export default function MindMapScreen() {
       <View style={styles.header}>
         <View>
           <Text style={[styles.title, { color: colors.foreground }]}>Mind Map</Text>
-          {(map?.unprocessedCount ?? 0) > 0 && (
+          {isAnalyzing ? (
+            <Text style={[styles.subtitle, { color: colors.primary }]}>
+              Analysing…
+            </Text>
+          ) : (map?.unprocessedCount ?? 0) > 0 ? (
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
               {map!.unprocessedCount} events awaiting analysis
             </Text>
-          )}
+          ) : null}
         </View>
         <View style={styles.headerActions}>
+          {/* Auto-analyse toggle */}
+          <TouchableOpacity
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: autoAnalyse
+                  ? `${colors.primary}22`
+                  : colors.secondary,
+                borderWidth: 1,
+                borderColor: autoAnalyse ? colors.primary : 'transparent',
+              },
+            ]}
+            onPress={toggleAutoAnalyse}
+            accessibilityLabel={autoAnalyse ? 'Auto-analyse on' : 'Auto-analyse off'}
+            accessibilityRole="switch"
+          >
+            <Feather
+              name="zap"
+              size={16}
+              color={autoAnalyse ? colors.primary : colors.mutedForeground}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.secondary }]}
             onPress={() => router.push('/permissions')}
           >
             <Feather name="settings" size={18} color={colors.secondaryForeground} />
           </TouchableOpacity>
+
+          {/* Manual analyse button */}
           <TouchableOpacity
             style={[
               styles.analyzeButton,
@@ -218,8 +296,8 @@ export default function MindMapScreen() {
               Your map is empty
             </Text>
             <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-              Add mood check-ins or thought entries, then tap Analyse to build your cognitive
-              conceptualization.
+              Add mood check-ins or thought entries — your map updates automatically when you return
+              here.
             </Text>
           </Animated.View>
         ) : (

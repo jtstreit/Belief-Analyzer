@@ -16,9 +16,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { setBaseUrl } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { ModalityProvider } from '@/contexts/ModalityContext';
+import { API_ORIGIN } from '@/constants/api';
 
 // Set base URL for API client
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+setBaseUrl(API_ORIGIN);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

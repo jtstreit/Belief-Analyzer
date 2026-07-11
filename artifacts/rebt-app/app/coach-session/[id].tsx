@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useModality } from '@/contexts/ModalityContext';
 import { getExerciseById } from '@/constants/exercises';
+import { API_ORIGIN } from '@/constants/api';
 
 const TypingDot = ({ delay }: { delay: number }) => {
   const translateY = useSharedValue(0);
@@ -160,7 +161,7 @@ export default function CoachSessionScreen() {
 
     try {
       const response = await expoFetch(
-        `https://${process.env.EXPO_PUBLIC_DOMAIN}/api/openai/conversations/${convId}/messages`,
+        `${API_ORIGIN}/api/openai/conversations/${convId}/messages`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

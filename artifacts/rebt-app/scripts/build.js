@@ -156,6 +156,8 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       detached: false,
       cwd: projectRoot,
       env,
+      // Windows can only resolve the pnpm .cmd shim through a shell
+      shell: process.platform === 'win32',
     },
   );
 

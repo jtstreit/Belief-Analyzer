@@ -12,7 +12,8 @@ import Animated, {
   FadeIn, FadeInRight, FadeInUp, useAnimatedStyle, useSharedValue, withSpring,
 } from 'react-native-reanimated';
 import { useModality } from '@/contexts/ModalityContext';
-import { getExerciseById, type ExerciseStep } from '@/constants/exercises';
+import { type ExerciseStep } from '@/constants/exercises';
+import { useExerciseById } from '@/hooks/useExerciseCatalog';
 import { useCreateExerciseSession, useUpdateExerciseSession, useCreateOpenaiConversation } from '@workspace/api-client-react';
 
 // ─── Step input components ────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ export default function ExerciseScreen() {
   const router = useRouter();
   const { modality } = useModality();
 
-  const exercise = getExerciseById(exerciseId ?? '');
+  const { exercise, isLoading: catalogLoading } = useExerciseById(exerciseId);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | number>>({});
@@ -182,7 +183,11 @@ export default function ExerciseScreen() {
   if (!exercise) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.foreground }}>Exercise not found.</Text>
+        {catalogLoading ? (
+          <ActivityIndicator color={activeColor} />
+        ) : (
+          <Text style={{ color: colors.foreground }}>Exercise not found.</Text>
+        )}
       </View>
     );
   }

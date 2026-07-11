@@ -1,8 +1,30 @@
 import { Router } from "express";
-import { db, exerciseSessions } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { db, exerciseSessions, exercisesTable } from "@workspace/db";
+import { eq, desc, and, asc, or } from "drizzle-orm";
 
 const router = Router();
+
+// List exercise definitions — DB is the source of truth for the catalog
+router.get("/exercises", async (req, res) => {
+  try {
+    const modality = req.query["modality"] as string | undefined;
+
+    const rows = await db
+      .select()
+      .from(exercisesTable)
+      .where(
+        modality
+          ? or(eq(exercisesTable.modality, modality), eq(exercisesTable.modality, "both"))
+          : undefined,
+      )
+      .orderBy(asc(exercisesTable.sortOrder));
+
+    res.json(rows);
+  } catch (err) {
+    req.log.error({ err }, "Failed to list exercises");
+    res.status(500).json({ error: "Failed to fetch exercises" });
+  }
+});
 
 // List exercise sessions
 router.get("/exercise-sessions", async (req, res) => {

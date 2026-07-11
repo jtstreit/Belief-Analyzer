@@ -13,7 +13,7 @@ import Animated, {
   useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { useModality } from '@/contexts/ModalityContext';
-import { getExerciseById } from '@/constants/exercises';
+import { useExerciseById } from '@/hooks/useExerciseCatalog';
 import { API_ORIGIN } from '@/constants/api';
 
 const TypingDot = ({ delay }: { delay: number }) => {
@@ -57,7 +57,7 @@ function ExerciseRecommendationCard({
   onDismiss: () => void;
 }) {
   const router = useRouter();
-  const exerciseMeta = getExerciseById(exercise.id);
+  const { exercise: exerciseMeta } = useExerciseById(exercise.id);
   const minutes = exerciseMeta?.estimatedMinutes ?? null;
 
   return (

@@ -27,6 +27,7 @@ import type {
   BeliefUpdate,
   CognitiveMindMap,
   CoreSchema,
+  Exercise,
   ExerciseSession,
   ExerciseSessionInput,
   ExerciseSessionUpdate,
@@ -35,6 +36,7 @@ import type {
   ListAutomaticThoughtsParams,
   ListBeliefsParams,
   ListExerciseSessionsParams,
+  ListExercisesParams,
   ListTelemetryParams,
   OpenaiConversation,
   OpenaiConversationInput,
@@ -1728,6 +1730,90 @@ export function useGetProgress<TData = Awaited<ReturnType<typeof getProgress>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetProgressQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListExercisesUrl = (params?: ListExercisesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/exercises?${stringifiedParams}` : `/api/exercises`
+}
+
+/**
+ * @summary List exercise definitions — the catalog is served from the DB as source of truth
+ */
+export const listExercises = async (params?: ListExercisesParams, options?: RequestInit): Promise<Exercise[]> => {
+
+  return customFetch<Exercise[]>(getListExercisesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExercisesQueryKey = (params?: ListExercisesParams,) => {
+    return [
+    `/api/exercises`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListExercisesQueryOptions = <TData = Awaited<ReturnType<typeof listExercises>>, TError = ErrorType<unknown>>(params?: ListExercisesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExercises>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExercisesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExercises>>> = ({ signal }) => listExercises(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExercises>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExercisesQueryResult = NonNullable<Awaited<ReturnType<typeof listExercises>>>
+export type ListExercisesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List exercise definitions — the catalog is served from the DB as source of truth
+ */
+
+export function useListExercises<TData = Awaited<ReturnType<typeof listExercises>>, TError = ErrorType<unknown>>(
+ params?: ListExercisesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExercises>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExercisesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

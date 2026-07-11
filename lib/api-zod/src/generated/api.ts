@@ -459,6 +459,42 @@ export const GetProgressResponse = zod.object({
 
 
 /**
+ * @summary List exercise definitions — the catalog is served from the DB as source of truth
+ */
+export const ListExercisesQueryParams = zod.object({
+  "modality": zod.coerce.string().optional().describe('Filter to exercises usable in this modality (\"rebt\" or \"cbt\"; includes \"both\")')
+})
+
+export const ListExercisesResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "subtitle": zod.string(),
+  "modality": zod.enum(['rebt', 'cbt', 'both']),
+  "category": zod.enum(['cognitive_restructuring', 'behavioral', 'imagery', 'psychoeducation']),
+  "targetProcesses": zod.array(zod.string()),
+  "issues": zod.array(zod.string()),
+  "evidenceBase": zod.string(),
+  "rationale": zod.string(),
+  "estimatedMinutes": zod.number(),
+  "caution": zod.string().nullish(),
+  "icon": zod.string(),
+  "steps": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "instruction": zod.string(),
+  "type": zod.enum(['text', 'multiline', 'rating', 'suds', 'mood', 'choice', 'info']),
+  "placeholder": zod.string().optional(),
+  "options": zod.array(zod.string()).optional(),
+  "min": zod.number().optional(),
+  "max": zod.number().optional(),
+  "caution": zod.string().optional()
+})),
+  "sortOrder": zod.number()
+})
+export const ListExercisesResponse = zod.array(ListExercisesResponseItem)
+
+
+/**
  * @summary List exercise sessions
  */
 export const ListExerciseSessionsQueryParams = zod.object({

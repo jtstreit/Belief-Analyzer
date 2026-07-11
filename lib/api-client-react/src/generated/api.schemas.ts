@@ -197,6 +197,68 @@ export interface OpenaiConversationWithMessages {
   messages: OpenaiMessage[];
 }
 
+export type ExerciseStepType = typeof ExerciseStepType[keyof typeof ExerciseStepType];
+
+
+export const ExerciseStepType = {
+  text: 'text',
+  multiline: 'multiline',
+  rating: 'rating',
+  suds: 'suds',
+  mood: 'mood',
+  choice: 'choice',
+  info: 'info',
+} as const;
+
+export interface ExerciseStep {
+  id: string;
+  title: string;
+  instruction: string;
+  type: ExerciseStepType;
+  placeholder?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+  caution?: string;
+}
+
+export type ExerciseModality = typeof ExerciseModality[keyof typeof ExerciseModality];
+
+
+export const ExerciseModality = {
+  rebt: 'rebt',
+  cbt: 'cbt',
+  both: 'both',
+} as const;
+
+export type ExerciseCategory = typeof ExerciseCategory[keyof typeof ExerciseCategory];
+
+
+export const ExerciseCategory = {
+  cognitive_restructuring: 'cognitive_restructuring',
+  behavioral: 'behavioral',
+  imagery: 'imagery',
+  psychoeducation: 'psychoeducation',
+} as const;
+
+export interface Exercise {
+  id: string;
+  title: string;
+  subtitle: string;
+  modality: ExerciseModality;
+  category: ExerciseCategory;
+  targetProcesses: string[];
+  issues: string[];
+  evidenceBase: string;
+  rationale: string;
+  estimatedMinutes: number;
+  /** @nullable */
+  caution?: string | null;
+  icon: string;
+  steps: ExerciseStep[];
+  sortOrder: number;
+}
+
 export interface ExerciseSession {
   id: number;
   exerciseId: string;
@@ -248,6 +310,13 @@ beliefType?: string;
 
 export type ListAutomaticThoughtsParams = {
 limit?: number;
+};
+
+export type ListExercisesParams = {
+/**
+ * Filter to exercises usable in this modality ("rebt" or "cbt"; includes "both")
+ */
+modality?: string;
 };
 
 export type ListExerciseSessionsParams = {

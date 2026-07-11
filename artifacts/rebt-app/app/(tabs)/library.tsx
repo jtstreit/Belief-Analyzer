@@ -10,9 +10,10 @@ import { Feather } from '@expo/vector-icons';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useModality, MODALITY_LABELS } from '@/contexts/ModalityContext';
 import {
-  EXERCISE_CATALOG, ISSUE_LABELS, CATEGORY_LABELS,
+  ISSUE_LABELS, CATEGORY_LABELS,
   type Exercise, type Issue, type ExerciseCategory,
 } from '@/constants/exercises';
+import { useExerciseCatalog } from '@/hooks/useExerciseCatalog';
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -97,8 +98,10 @@ export default function LibraryScreen() {
   const [categoryFilter, setCategoryFilter] = useState<ExerciseCategory | 'all'>('all');
   const [showAll, setShowAll] = useState(false);
 
+  const { exercises, isLoading } = useExerciseCatalog();
+
   const filtered = useMemo(() => {
-    return EXERCISE_CATALOG.filter((ex) => {
+    return exercises.filter((ex) => {
       const modalityMatch = showAll
         ? true
         : ex.modality === modality || ex.modality === 'both';
@@ -106,7 +109,7 @@ export default function LibraryScreen() {
       const categoryMatch = categoryFilter === 'all' || ex.category === categoryFilter;
       return modalityMatch && issueMatch && categoryMatch;
     });
-  }, [modality, issueFilter, categoryFilter, showAll]);
+  }, [exercises, modality, issueFilter, categoryFilter, showAll]);
 
   const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
 
@@ -190,10 +193,14 @@ export default function LibraryScreen() {
 
       {/* Result count */}
       <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>
-        {filtered.length} exercise{filtered.length !== 1 ? 's' : ''}
+        {isLoading ? 'Loading…' : `${filtered.length} exercise${filtered.length !== 1 ? 's' : ''}`}
       </Text>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator color={activeColor} />
+        </View>
+      ) : filtered.length === 0 ? (
         <View style={styles.empty}>
           <Feather name="inbox" size={32} color={colors.mutedForeground} />
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>

@@ -4,6 +4,9 @@
 
 $env:PATH = "C:\Users\46743\tools\node-v24.16.0-win-x64;C:\Users\46743\AppData\Local\Programs\Git\usr\bin;" + $env:PATH
 
+# Repo scripts use sh syntax (export, &&, case) — run them through Git's sh
+$env:npm_config_script_shell = "C:\Users\46743\AppData\Local\Programs\Git\usr\bin\sh.exe"
+
 # API server
 $env:PORT = "8080"
 $env:DATABASE_URL = "postgresql://postgres@localhost:5544/belief_analyzer"

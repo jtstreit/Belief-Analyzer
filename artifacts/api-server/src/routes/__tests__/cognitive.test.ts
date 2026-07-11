@@ -17,7 +17,8 @@ import supertest from "supertest";
 const sentinels = vi.hoisted(() => ({
   telemetryEventsTable: { _name: "telemetry" } as object,
   automaticThoughtsTable: { _name: "thoughts" } as object,
-  intermediateBeliefsCogTable: { _name: "ibeliefs" } as object,
+  // beliefText is a column marker so tests can assert it is the conflict target
+  intermediateBeliefsCogTable: { _name: "ibeliefs", beliefText: { _col: "beliefText" } },
   coreSchemasTable: { _name: "schemas" } as object,
 }));
 
@@ -676,7 +677,7 @@ describe("POST /api/cognitive/analyze", () => {
     // The conflict target must be the beliefText column (not the id or any
     // other column) — this mirrors the unique index on belief_text.
     for (const upsert of beliefUpserts) {
-      expect(upsert.target).toBe(sentinels.intermediateBeliefsCogTable.beliefText ?? upsert.target);
+      expect(upsert.target).toBe(sentinels.intermediateBeliefsCogTable.beliefText);
     }
 
     // The set payload must increment evidenceCount, not reset it to a literal 1.

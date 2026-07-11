@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, conversations as convTable, messages as msgTable, beliefsTable, exerciseSessions } from "@workspace/db";
+import { db, conversations as convTable, messages as msgTable, beliefsTable, exerciseSessions, exercisesTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import {
@@ -54,13 +54,17 @@ const BELIEF_TYPE_TO_PROCESSES: Record<string, string[]> = {
  * When `activeProcesses` is non-empty, only returns an exercise whose
  * targetProcesses overlaps with the user's currently active belief processes —
  * preventing false positives when an exercise is mentioned only in passing.
+ * When `allowedIds` is provided (from the DB catalog, filtered to the active
+ * modality), exercises outside the set are never surfaced.
  */
 function detectRecommendedExercise(
   text: string,
   activeProcesses: string[],
+  allowedIds: Set<string> | null,
 ): { id: string; title: string } | null {
   const lower = text.toLowerCase();
   for (const exercise of EXERCISE_KEYWORD_MAP) {
+    if (allowedIds && !allowedIds.has(exercise.id)) continue;
     for (const kw of exercise.keywords) {
       if (lower.includes(kw)) {
         // If we know the user's active processes, require at least one overlap.
@@ -350,7 +354,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     const modality = (parsed.data as { modality?: string }).modality ?? "rebt";
     const exerciseContext = (parsed.data as { exerciseContext?: string }).exerciseContext;
 
-    const [history, allBeliefs, pastConvos, recentExercises] = await Promise.all([
+    const [history, allBeliefs, pastConvos, recentExercises, catalog] = await Promise.all([
       db.select().from(msgTable).where(eq(msgTable.conversationId, id)).orderBy(msgTable.createdAt),
       db.select().from(beliefsTable).orderBy(desc(beliefsTable.createdAt)),
       db.select().from(msgTable)
@@ -361,7 +365,10 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
         .where(eq(exerciseSessions.completed, true))
         .orderBy(desc(exerciseSessions.createdAt))
         .limit(5),
+      db.select().from(exercisesTable),
     ]);
+
+    const exercisesById = new Map(catalog.map((e) => [e.id, e]));
 
     // Build persistent memory block
     const activeBeliefs = allBeliefs.filter(b => b.status === "active");
@@ -386,16 +393,22 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       .map(m => `  - ${m.content.slice(0, 200).replace(/\n/g, " ")}…`);
 
     const completedExerciseLines = recentExercises.flatMap(s => {
-      const header = `  - Completed "${s.exerciseId}" (${s.modality.toUpperCase()})${s.moodBefore != null && s.moodAfter != null ? `, mood ${s.moodBefore}→${s.moodAfter}/10` : ""}`;
+      const definition = exercisesById.get(s.exerciseId);
+      const exerciseName = definition?.title ?? s.exerciseId;
+      const header = `  - Completed "${exerciseName}" (${s.modality.toUpperCase()})${s.moodBefore != null && s.moodAfter != null ? `, mood ${s.moodBefore}→${s.moodAfter}/10` : ""}`;
       const stepLines: string[] = [];
       if (s.stepData && typeof s.stepData === "object") {
         const data = s.stepData as Record<string, string | number>;
         for (const [key, value] of Object.entries(data)) {
           if (typeof value === "string" && value.trim().length > 0) {
-            const label = key
-              .replace(/_/g, " ")
-              .replace(/([a-z])([A-Z])/g, "$1 $2")
-              .toLowerCase();
+            // Prefer the exercise definition's human step title; fall back to a
+            // de-camelized key only when the step is unknown to the catalog.
+            const label =
+              definition?.steps.find((st) => st.id === key)?.title ??
+              key
+                .replace(/_/g, " ")
+                .replace(/([a-z])([A-Z])/g, "$1 $2")
+                .toLowerCase();
             const excerpt = value.length > 300 ? value.slice(0, 300) + "…" : value;
             stepLines.push(`      ${label}: "${excerpt}"`);
           }
@@ -475,8 +488,20 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       ),
     ];
 
+    // Only surface exercises that exist in the catalog AND match the active
+    // modality ("both" always qualifies). An unseeded catalog disables the
+    // filter rather than silencing recommendations entirely.
+    const allowedIds =
+      catalog.length > 0
+        ? new Set(
+            catalog
+              .filter((e) => e.modality === modality || e.modality === "both")
+              .map((e) => e.id),
+          )
+        : null;
+
     // Detect if Vera recommended an exercise and emit it as a structured event
-    const recommendedExercise = detectRecommendedExercise(fullResponse, activeProcesses);
+    const recommendedExercise = detectRecommendedExercise(fullResponse, activeProcesses, allowedIds);
     if (recommendedExercise) {
       res.write(`data: ${JSON.stringify({ recommendedExercise })}\n\n`);
     }

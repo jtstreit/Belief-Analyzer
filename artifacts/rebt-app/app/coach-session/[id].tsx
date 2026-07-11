@@ -306,47 +306,50 @@ export default function CoachSessionScreen() {
         inverted
         contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
         ListHeaderComponent={
-          <>
-            {isStreaming ? (
-              <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.messageContainer, styles.messageAssistant]}>
-                <View style={[
-                  styles.messageBubble,
-                  {
-                    backgroundColor: colors.card,
-                    borderLeftWidth: 4,
-                    borderLeftColor: activeColor,
-                    shadowColor: activeColor,
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    shadowOffset: { width: -2, height: 0 },
-                    elevation: 4,
-                  },
-                ]}>
-                  {streamedContent ? (
-                    <Animated.View entering={FadeIn.duration(300)}>
-                      <Text style={[styles.messageText, { color: colors.cardForeground }]}>
-                        {renderBoldText(streamedContent)}
-                      </Text>
-                    </Animated.View>
-                  ) : (
-                    <TypingIndicator />
-                  )}
-                </View>
-              </Animated.View>
-            ) : null}
-            {!isStreaming && recommendedExercise ? (
-              <ExerciseRecommendationCard
-                exercise={recommendedExercise}
-                convId={convId}
-                modality={modality}
-                activeColor={activeColor}
-                colors={colors}
-                onDismiss={() => setRecommendedExercise(null)}
-              />
-            ) : null}
-          </>
+          isStreaming ? (
+            <Animated.View entering={SlideInUp.springify().damping(16)} style={[styles.messageContainer, styles.messageAssistant]}>
+              <View style={[
+                styles.messageBubble,
+                {
+                  backgroundColor: colors.card,
+                  borderLeftWidth: 4,
+                  borderLeftColor: activeColor,
+                  shadowColor: activeColor,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  shadowOffset: { width: -2, height: 0 },
+                  elevation: 4,
+                },
+              ]}>
+                {streamedContent ? (
+                  <Animated.View entering={FadeIn.duration(300)}>
+                    <Text style={[styles.messageText, { color: colors.cardForeground }]}>
+                      {renderBoldText(streamedContent)}
+                    </Text>
+                  </Animated.View>
+                ) : (
+                  <TypingIndicator />
+                )}
+              </View>
+            </Animated.View>
+          ) : null
         }
       />
+
+      {/* Rendered outside the inverted FlatList so scrolling can never
+          unmount or clip it — it holds its spot above the input. */}
+      {!isStreaming && recommendedExercise ? (
+        <View style={styles.recCardDock}>
+          <ExerciseRecommendationCard
+            exercise={recommendedExercise}
+            convId={convId}
+            modality={modality}
+            activeColor={activeColor}
+            colors={colors}
+            onDismiss={() => setRecommendedExercise(null)}
+          />
+        </View>
+      ) : null}
 
       <View style={[
         styles.inputContainer,
@@ -403,6 +406,7 @@ const styles = StyleSheet.create({
   sendButtonWrapper: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', paddingBottom: 4 },
   sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   // Recommendation card
+  recCardDock: { paddingHorizontal: 16 },
   recCard: {
     marginBottom: 16, borderRadius: 18, borderWidth: 1.5, overflow: 'hidden',
   },

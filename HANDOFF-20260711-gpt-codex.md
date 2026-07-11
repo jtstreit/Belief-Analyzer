@@ -6,9 +6,13 @@ Written 2026-07-11 by Claude Code for GPT/Codex. Self-contained — assume no ot
 
 **REBT Belief Analyzer** ("REBT Companion") — Jackson's personal dual-modality (REBT/CBT)
 self-coaching app. Expo app (`artifacts/rebt-app`) + Express 5 API (`artifacts/api-server`)
-+ Drizzle/Postgres (`lib/db`) in a pnpm workspace. LLM = DeepSeek V4-Pro via an
-OpenAI-compatible client (`lib/integrations-openai-ai-server`, baseURL defaults to
-api.deepseek.com; key = `OPENAI_API_KEY`). API client is Orval-generated from
++ Drizzle/Postgres (`lib/db`) in a pnpm workspace. LLM via an OpenAI-compatible client
+(`lib/integrations-openai-ai-server`; key = `OPENAI_API_KEY`). **Plan of record
+(Jackson, 2026-07-11): Vera runs on Claude — but the code is NOT migrated yet; it still
+hardcodes `deepseek-ai/DeepSeek-V4-Pro` (5 call sites in api-server routes) and defaults
+baseURL to api.deepseek.com. Treat DeepSeek as legacy to remove; build nothing new on it.
+Migration touchpoint list + route options: `Downloads\BeliefAnalyzer_Codex_Handoff.md` §4.2.**
+API client is Orval-generated from
 `lib/api-spec/openapi.yaml` (`pnpm --filter @workspace/api-spec run codegen`).
 Coach persona = Vera. The LIVE instance runs on Replit (app "Belief Analyzer",
 account streitwieserj92); **Replit Agent is banned (too expensive) — all dev is local.**
@@ -83,7 +87,8 @@ runs on real passive data instead of only manual check-ins.
 **⚠ HARD CONSTRAINTS:**
 - **PHI FILTER IS NON-NEGOTIABLE.** LifeOps telemetry includes raw screen text / SMS /
   notifications from Jackson's WORK phone usage (Credible EHR, Monarch, client content).
-  The Belief Analyzer's LLM is **DeepSeek — no BAA; PHI must never reach it.** The adapter
+  The Belief Analyzer's LLM is an external service with **no BAA — currently DeepSeek in
+  code, Claude after the planned migration; PHI must never reach it either way.** The adapter
   MUST filter clinical/work content before ingest. LifeOps already has a tested heuristic:
   `isClinicalContent` in `C:\Users\46743\sentinel-lifeops\src\lifeopsRules.ts` — reuse the
   logic (copy it into the bridge; see next bullet). Safest default: ingest only

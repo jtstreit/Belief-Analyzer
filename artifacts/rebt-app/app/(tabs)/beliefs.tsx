@@ -11,6 +11,71 @@ const FILTERS = ['All', 'Active', 'Challenged', 'Resolved'];
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity);
 
+const getBadgeColor = (type: string, colors: ReturnType<typeof useColors>) => {
+  switch (type) {
+    case 'catastrophizing':
+    case 'awfulizing':
+      return { bg: '#FDF0E6', fg: '#C4601A' };
+    case 'global_rating':
+      return { bg: '#E8F3F7', fg: '#357A93' };
+    case 'should_statements':
+      return { bg: '#E6F5F0', fg: '#2E8A6A' };
+    case 'low_frustration_tolerance':
+      return { bg: '#FAEEEE', fg: '#B94040' };
+    default:
+      return { bg: colors.muted, fg: colors.mutedForeground };
+  }
+};
+
+// Proper component — hooks (useSharedValue) are illegal inside a bare
+// renderItem callback and crash the web renderer.
+function BeliefCard({ item, index, onPress }: { item: any; index: number; onPress: () => void }) {
+  const colors = useColors();
+  const badgeColors = getBadgeColor(item.beliefType, colors);
+  const scale = useSharedValue(1);
+
+  return (
+    <AnimatedPressable
+      entering={SlideInRight.delay(index * 80).springify()}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, transform: [{ scale }] }]}
+      onPressIn={() => scale.value = withSpring(0.97)}
+      onPressOut={() => scale.value = withSpring(1)}
+      onPress={onPress}
+    >
+      <View style={styles.cardHeader}>
+        <View style={[styles.badge, { backgroundColor: badgeColors.bg }]}>
+          <Text style={[styles.badgeText, { color: badgeColors.fg }]}>
+            {item.beliefType.replace('_', ' ')}
+          </Text>
+        </View>
+        <View style={styles.statusRow}>
+          <View
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  item.status === 'resolved'
+                    ? (colors as any).success
+                    : item.status === 'challenged'
+                    ? colors.primary
+                    : colors.destructive,
+              },
+            ]}
+          />
+        </View>
+      </View>
+      <Text style={[styles.beliefText, { color: colors.cardForeground }]} numberOfLines={2}>
+        {item.beliefText}
+      </Text>
+      {item.triggerSituation && (
+        <Text style={[styles.situationText, { color: colors.mutedForeground }]} numberOfLines={1}>
+          <Feather name="zap" size={12} color={colors.mutedForeground} /> {item.triggerSituation}
+        </Text>
+      )}
+    </AnimatedPressable>
+  );
+}
+
 export default function BeliefsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -23,71 +88,9 @@ export default function BeliefsScreen() {
     { query: { queryKey: getListBeliefsQueryKey(activeFilter !== 'All' ? { status: activeFilter.toLowerCase() } : {}) } }
   );
 
-  const getBadgeColor = (type: string) => {
-    switch (type) {
-      case 'catastrophizing':
-      case 'awfulizing':
-        return { bg: '#FDF0E6', fg: '#C4601A' };
-      case 'global_rating':
-        return { bg: '#E8F3F7', fg: '#357A93' };
-      case 'should_statements':
-        return { bg: '#E6F5F0', fg: '#2E8A6A' };
-      case 'low_frustration_tolerance':
-        return { bg: '#FAEEEE', fg: '#B94040' };
-      default:
-        return { bg: colors.muted, fg: colors.mutedForeground };
-    }
-  };
-
   const chipLayouts = useRef<{ [key: string]: { x: number, width: number } }>({}).current;
   const indicatorX = useSharedValue(0);
   const indicatorW = useSharedValue(0);
-
-  const renderBelief = ({ item, index }: { item: any, index: number }) => {
-    const badgeColors = getBadgeColor(item.beliefType);
-    const scale = useSharedValue(1);
-
-    return (
-      <AnimatedPressable
-        entering={SlideInRight.delay(index * 80).springify()}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, transform: [{ scale }] }]}
-        onPressIn={() => scale.value = withSpring(0.97)}
-        onPressOut={() => scale.value = withSpring(1)}
-        onPress={() => router.push(`/belief/${item.id}`)}
-      >
-        <View style={styles.cardHeader}>
-          <View style={[styles.badge, { backgroundColor: badgeColors.bg }]}>
-            <Text style={[styles.badgeText, { color: badgeColors.fg }]}>
-              {item.beliefType.replace('_', ' ')}
-            </Text>
-          </View>
-          <View style={styles.statusRow}>
-            <View
-              style={[
-                styles.statusDot,
-                {
-                  backgroundColor:
-                    item.status === 'resolved'
-                      ? (colors as any).success
-                      : item.status === 'challenged'
-                      ? colors.primary
-                      : colors.destructive,
-                },
-              ]}
-            />
-          </View>
-        </View>
-        <Text style={[styles.beliefText, { color: colors.cardForeground }]} numberOfLines={2}>
-          {item.beliefText}
-        </Text>
-        {item.triggerSituation && (
-          <Text style={[styles.situationText, { color: colors.mutedForeground }]} numberOfLines={1}>
-            <Feather name="zap" size={12} color={colors.mutedForeground} /> {item.triggerSituation}
-          </Text>
-        )}
-      </AnimatedPressable>
-    );
-  };
 
   const emptyPulse = useSharedValue(1);
   useEffect(() => {
@@ -147,7 +150,9 @@ export default function BeliefsScreen() {
         <FlatList
           data={beliefs}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderBelief}
+          renderItem={({ item, index }) => (
+            <BeliefCard item={item} index={index} onPress={() => router.push(`/belief/${item.id}`)} />
+          )}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
           onRefresh={refetch}
           refreshing={isLoading}

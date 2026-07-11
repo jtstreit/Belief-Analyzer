@@ -14,6 +14,43 @@ import { useModality, MODALITY_LABELS } from '@/contexts/ModalityContext';
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity);
 
+// Proper component — hooks (useSharedValue) are illegal inside a bare
+// renderItem callback and crash the web renderer.
+function ConversationCard({
+  item, index, activeColor, onPress,
+}: { item: any; index: number; activeColor: string; onPress: () => void }) {
+  const colors = useColors();
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const isRecent = new Date().getTime() - new Date(item.createdAt).getTime() < 2 * 24 * 60 * 60 * 1000;
+
+  return (
+    <AnimatedPressable
+      entering={FadeInDown.delay(index * 100).springify()}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: isRecent ? activeColor + '66' : colors.border }, pressStyle]}
+      onPressIn={() => { scale.value = withSpring(0.96); }}
+      onPressOut={() => { scale.value = withSpring(1); }}
+      onPress={onPress}
+    >
+      <View style={[styles.cardAccent, { backgroundColor: isRecent ? activeColor : colors.muted }]} />
+      <View style={styles.cardInner}>
+        <View style={styles.cardIcon}>
+          <Feather name="message-circle" size={24} color={isRecent ? activeColor : colors.mutedForeground} />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>
+            {item.title || 'Coaching Session'}
+          </Text>
+          <Text style={[styles.cardSubtitle, { color: colors.mutedForeground }]}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+      </View>
+    </AnimatedPressable>
+  );
+}
+
 export default function CoachScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -36,38 +73,6 @@ export default function CoachScreen() {
     } catch (e) {
       console.error(e);
     }
-  };
-
-  const renderConversation = ({ item, index }: { item: any; index: number }) => {
-    const scale = useSharedValue(1);
-    const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-    const isRecent = new Date().getTime() - new Date(item.createdAt).getTime() < 2 * 24 * 60 * 60 * 1000;
-
-    return (
-      <AnimatedPressable
-        entering={FadeInDown.delay(index * 100).springify()}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: isRecent ? activeColor + '66' : colors.border }, pressStyle]}
-        onPressIn={() => { scale.value = withSpring(0.96); }}
-        onPressOut={() => { scale.value = withSpring(1); }}
-        onPress={() => router.push(`/coach-session/${item.id}?modality=${modality}`)}
-      >
-        <View style={[styles.cardAccent, { backgroundColor: isRecent ? activeColor : colors.muted }]} />
-        <View style={styles.cardInner}>
-          <View style={styles.cardIcon}>
-            <Feather name="message-circle" size={24} color={isRecent ? activeColor : colors.mutedForeground} />
-          </View>
-          <View style={styles.cardContent}>
-            <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>
-              {item.title || 'Coaching Session'}
-            </Text>
-            <Text style={[styles.cardSubtitle, { color: colors.mutedForeground }]}>
-              {new Date(item.createdAt).toLocaleDateString()}
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-        </View>
-      </AnimatedPressable>
-    );
   };
 
   const fabPulse = useSharedValue(1);
@@ -121,7 +126,14 @@ export default function CoachScreen() {
         <FlatList
           data={conversations}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderConversation}
+          renderItem={({ item, index }) => (
+            <ConversationCard
+              item={item}
+              index={index}
+              activeColor={activeColor}
+              onPress={() => router.push(`/coach-session/${item.id}?modality=${modality}`)}
+            />
+          )}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
           onRefresh={refetch}
           refreshing={isLoading}

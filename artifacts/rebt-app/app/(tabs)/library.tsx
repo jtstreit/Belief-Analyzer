@@ -38,6 +38,55 @@ const CATEGORY_ICONS: Record<string, string> = {
   psychoeducation: 'book-open',
 };
 
+// Proper component — hooks (useSharedValue) are illegal inside a bare
+// renderItem callback and crash the web renderer.
+function ExerciseCard({
+  item, index, activeColor, onPress,
+}: { item: Exercise; index: number; activeColor: string; onPress: () => void }) {
+  const colors = useColors();
+  const scale = useSharedValue(1);
+  const mColor = MODALITY_COLORS[item.modality];
+
+  return (
+    <AnimatedPressable
+      entering={FadeInDown.delay(index * 60).springify()}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPressIn={() => { scale.value = withSpring(0.97); }}
+      onPressOut={() => { scale.value = withSpring(1); }}
+      onPress={onPress}
+    >
+      <View style={styles.cardTop}>
+        <View style={[styles.iconBox, { backgroundColor: colors.muted }]}>
+          <Feather name={item.icon as any} size={20} color={activeColor} />
+        </View>
+        <View style={styles.cardMeta}>
+          <View style={[styles.modalityBadge, { backgroundColor: mColor + '22', borderColor: mColor + '55' }]}>
+            <Text style={[styles.modalityBadgeText, { color: mColor }]}>
+              {item.modality === 'both' ? 'REBT + CBT' : item.modality.toUpperCase()}
+            </Text>
+          </View>
+          <Text style={[styles.cardMin, { color: colors.mutedForeground }]}>
+            ~{item.estimatedMinutes} min
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.cardTitle, { color: colors.foreground }]}>{item.title}</Text>
+      <Text style={[styles.cardSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
+        {item.subtitle}
+      </Text>
+      <View style={styles.cardFooter}>
+        <View style={[styles.categoryBadge, { backgroundColor: colors.muted }]}>
+          <Feather name={CATEGORY_ICONS[item.category] as any} size={10} color={colors.mutedForeground} />
+          <Text style={[styles.categoryText, { color: colors.mutedForeground }]}>
+            {CATEGORY_LABELS[item.category]}
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+      </View>
+    </AnimatedPressable>
+  );
+}
+
 export default function LibraryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -60,50 +109,6 @@ export default function LibraryScreen() {
   }, [modality, issueFilter, categoryFilter, showAll]);
 
   const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
-
-  const renderExercise = ({ item, index }: { item: Exercise; index: number }) => {
-    const scale = useSharedValue(1);
-    const mColor = MODALITY_COLORS[item.modality];
-
-    return (
-      <AnimatedPressable
-        entering={FadeInDown.delay(index * 60).springify()}
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-        onPressIn={() => { scale.value = withSpring(0.97); }}
-        onPressOut={() => { scale.value = withSpring(1); }}
-        onPress={() => router.push(`/exercise/${item.id}`)}
-      >
-        <View style={styles.cardTop}>
-          <View style={[styles.iconBox, { backgroundColor: colors.muted }]}>
-            <Feather name={item.icon as any} size={20} color={activeColor} />
-          </View>
-          <View style={styles.cardMeta}>
-            <View style={[styles.modalityBadge, { backgroundColor: mColor + '22', borderColor: mColor + '55' }]}>
-              <Text style={[styles.modalityBadgeText, { color: mColor }]}>
-                {item.modality === 'both' ? 'REBT + CBT' : item.modality.toUpperCase()}
-              </Text>
-            </View>
-            <Text style={[styles.cardMin, { color: colors.mutedForeground }]}>
-              ~{item.estimatedMinutes} min
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.cardTitle, { color: colors.foreground }]}>{item.title}</Text>
-        <Text style={[styles.cardSubtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
-          {item.subtitle}
-        </Text>
-        <View style={styles.cardFooter}>
-          <View style={[styles.categoryBadge, { backgroundColor: colors.muted }]}>
-            <Feather name={CATEGORY_ICONS[item.category] as any} size={10} color={colors.mutedForeground} />
-            <Text style={[styles.categoryText, { color: colors.mutedForeground }]}>
-              {CATEGORY_LABELS[item.category]}
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </View>
-      </AnimatedPressable>
-    );
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -199,7 +204,14 @@ export default function LibraryScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          renderItem={renderExercise}
+          renderItem={({ item, index }) => (
+            <ExerciseCard
+              item={item}
+              index={index}
+              activeColor={activeColor}
+              onPress={() => router.push(`/exercise/${item.id}`)}
+            />
+          )}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
         />

@@ -50,13 +50,18 @@ router.get("/patterns", async (req, res) => {
       }
     }
 
+    const lastAnalyzedAt =
+      allBeliefs.length > 0
+        ? new Date(Math.max(...allBeliefs.map((b) => new Date(b.createdAt).getTime()))).toISOString()
+        : null;
+
     res.json({
       totalBeliefs: allBeliefs.length,
       activeBeliefs: activeBeliefs.length,
       resolvedBeliefs: resolvedBeliefs.length,
       byType,
       recentStreak: streak,
-      lastAnalyzedAt: null,
+      lastAnalyzedAt,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get patterns");

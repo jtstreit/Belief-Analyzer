@@ -54,6 +54,7 @@ export default function CheckInScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzedBeliefs, setAnalyzedBeliefs] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [checkinError, setCheckinError] = useState<string | null>(null);
 
   const createTelemetry = useCreateTelemetry();
   const analyzePatterns = useAnalyzePatterns();
@@ -64,6 +65,7 @@ export default function CheckInScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsAnalyzing(true);
+    setCheckinError(null);
 
     try {
       await createTelemetry.mutateAsync({
@@ -88,7 +90,8 @@ export default function CheckInScreen() {
         setSelectedMood(null);
       }
     } catch (e) {
-      console.error(e);
+      // A silent failure looked identical to a successful save — surface it.
+      setCheckinError('Something went wrong saving or analyzing your check-in. Your text is still here — try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -186,6 +189,16 @@ export default function CheckInScreen() {
           />
         </Animated.View>
 
+        {checkinError ? (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={[styles.errorBanner, { backgroundColor: '#B9404022', borderColor: '#B9404066' }]}
+          >
+            <Feather name="alert-triangle" size={15} color="#B94040" />
+            <Text style={[styles.errorBannerText, { color: colors.foreground }]}>{checkinError}</Text>
+          </Animated.View>
+        ) : null}
+
         <Animated.View style={btnStyle}>
           <TouchableOpacity
             style={[styles.analyzeButton, { backgroundColor: colors.primary, opacity: (!thought && !selectedMood) || isAnalyzing ? 0.7 : 1 }]}
@@ -246,6 +259,16 @@ export default function CheckInScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 20, gap: 32 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  errorBannerText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
   title: { fontSize: 32, fontFamily: 'Inter_700Bold' },
   section: { gap: 12 },
   label: { fontSize: 20, fontFamily: 'Inter_600SemiBold' },

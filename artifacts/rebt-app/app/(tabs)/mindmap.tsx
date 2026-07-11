@@ -14,6 +14,8 @@ import {
   useGetCognitiveMap,
   getGetCognitiveMapQueryKey,
   useAnalyzeCognitive,
+  useDismissIntermediateBelief,
+  useDismissCoreSchema,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import Animated, {
@@ -141,17 +143,43 @@ export default function MindMapScreen() {
   });
 
   const { mutateAsync: runAnalysis } = useAnalyzeCognitive();
+  const dismissBelief = useDismissIntermediateBelief();
+  const dismissSchema = useDismissCoreSchema();
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const handleAnalyze = useCallback(async () => {
     if (isAnalyzing) return;
     setIsAnalyzing(true);
+    setAnalysisError(null);
     try {
       await runAnalysis();
       await queryClient.invalidateQueries({ queryKey: getGetCognitiveMapQueryKey() });
+    } catch {
+      // Surface the failure — a silent no-op here left users staring at a
+      // stale map with no idea the analysis never ran.
+      setAnalysisError('Analysis failed. Your entries are safe — tap Analyse to retry.');
     } finally {
       setIsAnalyzing(false);
     }
   }, [runAnalysis, queryClient, isAnalyzing]);
+
+  const handleDismissBelief = useCallback(async (id: number) => {
+    try {
+      await dismissBelief.mutateAsync({ id });
+      await queryClient.invalidateQueries({ queryKey: getGetCognitiveMapQueryKey() });
+    } catch {
+      setAnalysisError('Could not dismiss the belief. Check your connection and try again.');
+    }
+  }, [dismissBelief, queryClient]);
+
+  const handleDismissSchema = useCallback(async (id: number) => {
+    try {
+      await dismissSchema.mutateAsync({ id });
+      await queryClient.invalidateQueries({ queryKey: getGetCognitiveMapQueryKey() });
+    } catch {
+      setAnalysisError('Could not dismiss the schema. Check your connection and try again.');
+    }
+  }, [dismissSchema, queryClient]);
 
   // ── Auto-trigger on focus ──────────────────────────────────────────────
   // Fires whenever the tab is brought into focus. If auto-analyse is enabled
@@ -273,6 +301,19 @@ export default function MindMapScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {analysisError ? (
+        <Animated.View
+          entering={FadeIn.duration(300)}
+          style={[styles.errorBanner, { backgroundColor: '#B9404022', borderColor: '#B9404066' }]}
+        >
+          <Feather name="alert-triangle" size={15} color="#B94040" />
+          <Text style={[styles.errorBannerText, { color: colors.foreground }]}>{analysisError}</Text>
+          <TouchableOpacity onPress={() => setAnalysisError(null)} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <Feather name="x" size={15} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </Animated.View>
+      ) : null}
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
@@ -411,6 +452,13 @@ export default function MindMapScreen() {
                           {b.category}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        onPress={() => handleDismissBelief(b.id)}
+                        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                        accessibilityLabel="Dismiss belief"
+                      >
+                        <Feather name="x" size={15} color={colors.mutedForeground} />
+                      </TouchableOpacity>
                     </View>
                     <Text style={[styles.beliefText, { color: colors.cardForeground }]}>
                       {b.beliefText}
@@ -450,6 +498,13 @@ export default function MindMapScreen() {
                             {domainCfg.label}
                           </Text>
                         </View>
+                        <TouchableOpacity
+                          onPress={() => handleDismissSchema(s.id)}
+                          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                          accessibilityLabel="Dismiss schema"
+                        >
+                          <Feather name="x" size={15} color={colors.mutedForeground} />
+                        </TouchableOpacity>
                       </View>
                       <Text style={[styles.beliefText, { color: colors.cardForeground }]}>
                         {s.schemaText}
@@ -574,7 +629,19 @@ const styles = StyleSheet.create({
   distCountText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
 
   // Beliefs / schemas
-  beliefHeader: { flexDirection: 'row' },
+  beliefHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  errorBannerText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
   beliefText: { fontSize: 15, fontFamily: 'Inter_400Regular', lineHeight: 22 },
   categoryPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   categoryText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textTransform: 'capitalize' },

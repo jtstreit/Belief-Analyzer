@@ -340,6 +340,26 @@ export const ListCoreSchemasResponse = zod.array(ListCoreSchemasResponseItem)
 
 
 /**
+ * @summary Dismiss an intermediate belief — soft delete; re-analysis cannot resurrect it
+ */
+export const DismissIntermediateBeliefParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DismissIntermediateBeliefResponse = zod.void()
+
+
+/**
+ * @summary Dismiss a core schema — soft delete; re-analysis cannot resurrect it
+ */
+export const DismissCoreSchemaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DismissCoreSchemaResponse = zod.void()
+
+
+/**
  * @summary List all coaching conversations
  */
 export const ListOpenaiConversationsResponseItem = zod.object({

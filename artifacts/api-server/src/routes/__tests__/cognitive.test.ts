@@ -108,7 +108,9 @@ vi.mock("@workspace/db", () => {
     update: vi.fn((table: object) => ({
       set: (s: unknown) => {
         state.updated.push({ table, set: s });
-        return chain(undefined);
+        // Resolve to [] so `.returning()` consumers (decay/prune passes)
+        // can read `.length` — no rows affected by default.
+        return chain([]);
       },
     })),
 
@@ -783,18 +785,22 @@ describe("POST /api/cognitive/analyze", () => {
       expect(res.status).toBe(200);
     });
 
-    it("calls db.delete for both intermediateBeliefsCogTable and coreSchemasTable", async () => {
+    it("soft-dismisses (never deletes) stale rows in both cognitive tables", async () => {
       const { db } = await import("@workspace/db");
       const deleteSpy = db.delete as ReturnType<typeof vi.fn>;
 
       await agent.post("/api/cognitive/analyze");
 
-      // Should have been called exactly twice — once per table
-      const deletedTables = deleteSpy.mock.calls.map(
-        ([table]: [object]) => table,
-      );
-      expect(deletedTables).toContain(sentinels.intermediateBeliefsCogTable);
-      expect(deletedTables).toContain(sentinels.coreSchemasTable);
+      // Pruning must not hard-delete — deleted rows would be re-created by
+      // the next analysis run from the same underlying thoughts.
+      expect(deleteSpy).not.toHaveBeenCalled();
+
+      // Instead both tables receive a status:"dismissed" update.
+      const dismissalTables = state.updated
+        .filter((u) => (u.set as Record<string, unknown>)?.["status"] === "dismissed")
+        .map((u) => u.table);
+      expect(dismissalTables).toContain(sentinels.intermediateBeliefsCogTable);
+      expect(dismissalTables).toContain(sentinels.coreSchemasTable);
     });
 
     it("response shape is unchanged after pruning (map fields all present)", async () => {

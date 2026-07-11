@@ -23,8 +23,13 @@ async function buildMindMap() {
     db
       .select()
       .from(intermediateBeliefsCogTable)
+      .where(eq(intermediateBeliefsCogTable.status, "active"))
       .orderBy(desc(intermediateBeliefsCogTable.confidence)),
-    db.select().from(coreSchemasTable).orderBy(desc(coreSchemasTable.confidence)),
+    db
+      .select()
+      .from(coreSchemasTable)
+      .where(eq(coreSchemasTable.status, "active"))
+      .orderBy(desc(coreSchemasTable.confidence)),
     db
       .select({ id: telemetryEventsTable.id })
       .from(telemetryEventsTable)
@@ -76,11 +81,37 @@ router.get("/cognitive/intermediate-beliefs", async (req, res) => {
     const beliefs = await db
       .select()
       .from(intermediateBeliefsCogTable)
+      .where(eq(intermediateBeliefsCogTable.status, "active"))
       .orderBy(desc(intermediateBeliefsCogTable.confidence));
     res.json(beliefs);
   } catch (err) {
     req.log.error({ err }, "Failed to list intermediate beliefs");
     res.status(500).json({ error: "Failed to fetch intermediate beliefs" });
+  }
+});
+
+// Manually dismiss an intermediate belief — soft delete so re-analysis
+// cannot bring it back.
+router.delete("/cognitive/intermediate-beliefs/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"]!);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const updated = await db
+      .update(intermediateBeliefsCogTable)
+      .set({ status: "dismissed", dismissedAt: new Date() })
+      .where(eq(intermediateBeliefsCogTable.id, id))
+      .returning({ id: intermediateBeliefsCogTable.id });
+    if (updated.length === 0) {
+      res.status(404).json({ error: "Intermediate belief not found" });
+      return;
+    }
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to dismiss intermediate belief");
+    res.status(500).json({ error: "Failed to dismiss intermediate belief" });
   }
 });
 
@@ -91,11 +122,37 @@ router.get("/cognitive/core-schemas", async (req, res) => {
     const schemas = await db
       .select()
       .from(coreSchemasTable)
+      .where(eq(coreSchemasTable.status, "active"))
       .orderBy(desc(coreSchemasTable.confidence));
     res.json(schemas);
   } catch (err) {
     req.log.error({ err }, "Failed to list core schemas");
     res.status(500).json({ error: "Failed to fetch core schemas" });
+  }
+});
+
+// Manually dismiss a core schema — soft delete so re-analysis cannot
+// bring it back.
+router.delete("/cognitive/core-schemas/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"]!);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const updated = await db
+      .update(coreSchemasTable)
+      .set({ status: "dismissed", dismissedAt: new Date() })
+      .where(eq(coreSchemasTable.id, id))
+      .returning({ id: coreSchemasTable.id });
+    if (updated.length === 0) {
+      res.status(404).json({ error: "Core schema not found" });
+      return;
+    }
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to dismiss core schema");
+    res.status(500).json({ error: "Failed to dismiss core schema" });
   }
 });
 
@@ -259,9 +316,12 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
         )
         .join("\n");
 
+      // Only active beliefs are offered to the LLM for confirmation —
+      // dismissed ones must not be reinforced or resurrected.
+      const activeIBeliefs = existingIBeliefs.filter((b) => b.status === "active");
       const existingIText =
-        existingIBeliefs.length > 0
-          ? `\nExisting intermediate beliefs (reference by id when this batch confirms them):\n${existingIBeliefs.map((b) => `  id:${b.id} "${b.beliefText}" (${b.category})`).join("\n")}`
+        activeIBeliefs.length > 0
+          ? `\nExisting intermediate beliefs (reference by id when this batch confirms them):\n${activeIBeliefs.map((b) => `  id:${b.id} "${b.beliefText}" (${b.category})`).join("\n")}`
           : "";
 
       const layer2System = `You are a Beck-model CBT expert. From these automatic thoughts, synthesise intermediate beliefs — rules, assumptions, or attitudes.${existingIText}
@@ -302,7 +362,8 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
         if (!b.beliefText?.trim()) continue;
         if (b.matchesExistingId) {
           const existing = existingIBeliefs.find((e) => e.id === b.matchesExistingId);
-          if (existing) {
+          // Dismissed beliefs stay dismissed — never reinforce them.
+          if (existing && existing.status === "active") {
             await db
               .update(intermediateBeliefsCogTable)
               .set({
@@ -315,7 +376,9 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
         } else {
           // Use onConflictDoUpdate so an exact-duplicate beliefText (caught by
           // the unique index) accumulates evidence rather than failing silently
-          // or crashing the analysis run.
+          // or crashing the analysis run. setWhere keeps dismissed rows
+          // dismissed: the conflict update is a no-op for them, so a pruned
+          // belief cannot reappear on re-analysis.
           await db
             .insert(intermediateBeliefsCogTable)
             .values({
@@ -331,6 +394,7 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
                 confidence: sql`LEAST(95, ${intermediateBeliefsCogTable.confidence} + 10)`,
                 updatedAt: new Date(),
               },
+              setWhere: sql`${intermediateBeliefsCogTable.status} = 'active'`,
             });
         }
       }
@@ -341,6 +405,7 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
       db
         .select()
         .from(intermediateBeliefsCogTable)
+        .where(eq(intermediateBeliefsCogTable.status, "active"))
         .orderBy(desc(intermediateBeliefsCogTable.confidence)),
       db.select().from(coreSchemasTable),
     ]);
@@ -350,9 +415,11 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
         .map((b) => `- "${b.beliefText}" (${b.category}, confidence:${b.confidence})`)
         .join("\n");
 
+      // Dismissed schemas are withheld from the LLM so they are never confirmed.
+      const activeSchemas = existingSchemas.filter((s) => s.status === "active");
       const existingSchemasText =
-        existingSchemas.length > 0
-          ? `\nExisting core schemas (reference by id when confirmed):\n${existingSchemas.map((s) => `  id:${s.id} "${s.schemaText}" (${s.domain})`).join("\n")}`
+        activeSchemas.length > 0
+          ? `\nExisting core schemas (reference by id when confirmed):\n${activeSchemas.map((s) => `  id:${s.id} "${s.schemaText}" (${s.domain})`).join("\n")}`
           : "";
 
       const layer3System = `You are a Beck-model CBT expert. From these intermediate beliefs, infer core schemas.${existingSchemasText}
@@ -391,7 +458,8 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
         if (!s.schemaText?.trim() || !s.domain) continue;
         if (s.matchesExistingId) {
           const existing = existingSchemas.find((e) => e.id === s.matchesExistingId);
-          if (existing) {
+          // Dismissed schemas stay dismissed — never reinforce them.
+          if (existing && existing.status === "active") {
             await db
               .update(coreSchemasTable)
               .set({
@@ -403,7 +471,8 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
           }
         } else {
           // Same conflict-safe upsert as Pass 2 — unique index on schemaText
-          // catches duplicates the LLM mis-labels as new.
+          // catches duplicates the LLM mis-labels as new, and setWhere keeps
+          // dismissed rows dismissed.
           await db
             .insert(coreSchemasTable)
             .values({
@@ -419,37 +488,88 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
                 confidence: sql`LEAST(95, ${coreSchemasTable.confidence} + 10)`,
                 updatedAt: new Date(),
               },
+              setWhere: sql`${coreSchemasTable.status} = 'active'`,
             });
         }
       }
     }
 
-    // ── Maintenance pass: prune stale low-evidence entries ───────────
-    // Removes intermediate beliefs and core schemas that have never been
-    // confirmed by more than one analysis run, have very low confidence,
-    // and haven't been updated in over 30 days. These are almost certainly
-    // artefacts of a one-off session that no longer reflect the user's
-    // current patterns.
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    // ── Maintenance pass 1: decay confidence on stale entries ────────
+    // Active entries untouched for 14+ days lose 5 confidence points
+    // (floored at 5). The decay itself refreshes updatedAt, so each entry
+    // decays at most once per 14-day window of inactivity.
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
-    const [prunedBeliefs, prunedSchemas] = await Promise.all([
+    const [decayedBeliefs, decayedSchemas] = await Promise.all([
       db
-        .delete(intermediateBeliefsCogTable)
+        .update(intermediateBeliefsCogTable)
+        .set({
+          confidence: sql`GREATEST(5, ${intermediateBeliefsCogTable.confidence} - 5)`,
+          updatedAt: new Date(),
+        })
         .where(
           and(
-            lte(intermediateBeliefsCogTable.evidenceCount, 1),
-            lt(intermediateBeliefsCogTable.confidence, 20),
-            lt(intermediateBeliefsCogTable.updatedAt, thirtyDaysAgo),
+            eq(intermediateBeliefsCogTable.status, "active"),
+            lt(intermediateBeliefsCogTable.updatedAt, fourteenDaysAgo),
           ),
         )
         .returning({ id: intermediateBeliefsCogTable.id }),
       db
-        .delete(coreSchemasTable)
+        .update(coreSchemasTable)
+        .set({
+          confidence: sql`GREATEST(5, ${coreSchemasTable.confidence} - 5)`,
+          updatedAt: new Date(),
+        })
         .where(
           and(
+            eq(coreSchemasTable.status, "active"),
+            lt(coreSchemasTable.updatedAt, fourteenDaysAgo),
+          ),
+        )
+        .returning({ id: coreSchemasTable.id }),
+    ]);
+
+    if (decayedBeliefs.length > 0 || decayedSchemas.length > 0) {
+      req.log.info(
+        {
+          decayedBeliefIds: decayedBeliefs.map((b) => b.id),
+          decayedSchemaIds: decayedSchemas.map((s) => s.id),
+        },
+        `Decayed confidence on ${decayedBeliefs.length} stale belief(s) and ${decayedSchemas.length} stale schema(s)`,
+      );
+    }
+
+    // ── Maintenance pass 2: prune stale low-evidence entries ─────────
+    // Entries created over 30 days ago that were never confirmed by more
+    // than one analysis run and still have low confidence are almost
+    // certainly artefacts of a one-off session. They are DISMISSED, not
+    // deleted — the row (and its unique text) stays behind so a later
+    // analysis run cannot re-create the same belief from old thoughts.
+    // (createdAt, not updatedAt: the decay pass refreshes updatedAt.)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [prunedBeliefs, prunedSchemas] = await Promise.all([
+      db
+        .update(intermediateBeliefsCogTable)
+        .set({ status: "dismissed", dismissedAt: new Date() })
+        .where(
+          and(
+            eq(intermediateBeliefsCogTable.status, "active"),
+            lte(intermediateBeliefsCogTable.evidenceCount, 1),
+            lt(intermediateBeliefsCogTable.confidence, 20),
+            lt(intermediateBeliefsCogTable.createdAt, thirtyDaysAgo),
+          ),
+        )
+        .returning({ id: intermediateBeliefsCogTable.id }),
+      db
+        .update(coreSchemasTable)
+        .set({ status: "dismissed", dismissedAt: new Date() })
+        .where(
+          and(
+            eq(coreSchemasTable.status, "active"),
             lte(coreSchemasTable.evidenceCount, 1),
             lt(coreSchemasTable.confidence, 15),
-            lt(coreSchemasTable.updatedAt, thirtyDaysAgo),
+            lt(coreSchemasTable.createdAt, thirtyDaysAgo),
           ),
         )
         .returning({ id: coreSchemasTable.id }),
@@ -461,7 +581,7 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
           prunedBeliefIds: prunedBeliefs.map((b) => b.id),
           prunedSchemaIds: prunedSchemas.map((s) => s.id),
         },
-        `Pruned ${prunedBeliefs.length} stale intermediate belief(s) and ${prunedSchemas.length} stale core schema(s)`,
+        `Pruned (dismissed) ${prunedBeliefs.length} stale intermediate belief(s) and ${prunedSchemas.length} stale core schema(s)`,
       );
     }
 

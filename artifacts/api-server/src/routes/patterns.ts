@@ -127,10 +127,19 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
       detectedBeliefs = [];
     }
 
-    // Save detected beliefs to DB
+    // Save detected beliefs to DB. Re-analysis routinely re-detects the same
+    // belief — skip any text that already exists (whatever its status) so
+    // duplicates don't accumulate and resolved/dismissed beliefs stay gone.
+    const existingBeliefs = await db.select().from(beliefsTable);
+    const existingTexts = new Set(
+      existingBeliefs.map((b) => b.beliefText.trim().toLowerCase()),
+    );
+
     const saved = [];
     for (const b of detectedBeliefs) {
       if (!b.beliefText || !b.beliefType) continue;
+      if (existingTexts.has(b.beliefText.trim().toLowerCase())) continue;
+      existingTexts.add(b.beliefText.trim().toLowerCase());
       const [inserted] = await db
         .insert(beliefsTable)
         .values({

@@ -6,12 +6,20 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { useGetProgress } from '@workspace/api-client-react';
+import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import {
+  useGetProgress,
+  useListExerciseSessions,
+  getListExerciseSessionsQueryKey,
+} from '@workspace/api-client-react';
 import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 import Svg, { Line, Circle, Polyline, Rect, Text as SvgText, G } from 'react-native-svg';
+import { useExerciseCatalog } from '@/hooks/useExerciseCatalog';
 
 // ── Mini line chart for mood trend ──────────────────────────────────────────
 type MoodPoint = { date: string; avgBefore: number; avgAfter: number };
@@ -161,7 +169,15 @@ function LegendDot({ color, label, labelColor }: { color: string; label: string;
 export default function ProgressScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { data, isLoading, refetch } = useGetProgress();
+  const { data: pastSessions } = useListExerciseSessions(
+    { completed: true },
+    { query: { queryKey: getListExerciseSessionsQueryKey({ completed: true }) } },
+  );
+  const { exercises: catalog } = useExerciseCatalog();
+  const exerciseTitle = (exerciseId: string) =>
+    catalog.find((e) => e.id === exerciseId)?.title ?? exerciseId.replace(/-/g, ' ');
 
   const accentColor  = colors.accent;
   const cbtColor     = colors.cbt;
@@ -280,6 +296,32 @@ export default function ProgressScreen() {
                   trackColor={colors.muted} labelColor={colors.mutedForeground} countColor={colors.foreground} />
               </Card>
             )}
+
+            {(pastSessions?.length ?? 0) > 0 && (
+              <Card title="Past Exercises" delay={420}
+                cardBg={colors.card} borderColor={colors.border} titleColor={colors.foreground}>
+                {pastSessions!.slice(0, 10).map((session) => (
+                  <TouchableOpacity
+                    key={session.id}
+                    style={[s.historyRow, { borderColor: colors.border }]}
+                    onPress={() => router.push(`/exercise-history/${session.id}` as never)}
+                  >
+                    <View style={s.historyText}>
+                      <Text style={[s.historyTitle, { color: colors.foreground }]} numberOfLines={1}>
+                        {exerciseTitle(session.exerciseId)}
+                      </Text>
+                      <Text style={[s.historyMeta, { color: colors.mutedForeground }]}>
+                        {new Date(session.createdAt).toLocaleDateString()}
+                        {session.moodBefore != null && session.moodAfter != null
+                          ? ` · mood ${session.moodBefore}→${session.moodAfter}`
+                          : ''}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                ))}
+              </Card>
+            )}
           </>
         )}
       </ScrollView>
@@ -297,6 +339,13 @@ const s = StyleSheet.create({
   statValue: { fontSize: 24, fontFamily: 'Inter_700Bold' },
   statLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', textAlign: 'center' },
   emptyBox:  { borderRadius: 16, borderWidth: 1, padding: 28, alignItems: 'center', gap: 10, marginTop: 40 },
+  historyRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  historyText: { flex: 1, gap: 2 },
+  historyTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  historyMeta: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   emptyTitle:{ fontSize: 17, fontFamily: 'Inter_600SemiBold' },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 22 },
 });

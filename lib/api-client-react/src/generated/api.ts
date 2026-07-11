@@ -1220,6 +1220,148 @@ export function useListCoreSchemas<TData = Awaited<ReturnType<typeof listCoreSch
 
 
 
+export const getDismissIntermediateBeliefUrl = (id: number,) => {
+
+
+
+
+  return `/api/cognitive/intermediate-beliefs/${id}`
+}
+
+/**
+ * @summary Dismiss an intermediate belief — soft delete; re-analysis cannot resurrect it
+ */
+export const dismissIntermediateBelief = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDismissIntermediateBeliefUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDismissIntermediateBeliefMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissIntermediateBelief>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissIntermediateBelief>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['dismissIntermediateBelief'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissIntermediateBelief>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  dismissIntermediateBelief(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissIntermediateBeliefMutationResult = NonNullable<Awaited<ReturnType<typeof dismissIntermediateBelief>>>
+
+    export type DismissIntermediateBeliefMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Dismiss an intermediate belief — soft delete; re-analysis cannot resurrect it
+ */
+export const useDismissIntermediateBelief = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissIntermediateBelief>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissIntermediateBelief>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDismissIntermediateBeliefMutationOptions(options));
+    }
+
+export const getDismissCoreSchemaUrl = (id: number,) => {
+
+
+
+
+  return `/api/cognitive/core-schemas/${id}`
+}
+
+/**
+ * @summary Dismiss a core schema — soft delete; re-analysis cannot resurrect it
+ */
+export const dismissCoreSchema = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDismissCoreSchemaUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDismissCoreSchemaMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissCoreSchema>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dismissCoreSchema>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['dismissCoreSchema'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dismissCoreSchema>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  dismissCoreSchema(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DismissCoreSchemaMutationResult = NonNullable<Awaited<ReturnType<typeof dismissCoreSchema>>>
+
+    export type DismissCoreSchemaMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Dismiss a core schema — soft delete; re-analysis cannot resurrect it
+ */
+export const useDismissCoreSchema = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dismissCoreSchema>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dismissCoreSchema>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDismissCoreSchemaMutationOptions(options));
+    }
+
 export const getListOpenaiConversationsUrl = () => {
 
 

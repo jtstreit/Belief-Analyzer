@@ -22,6 +22,10 @@ export const intermediateBeliefsCogTable = pgTable(
     category: text("category").notNull().default("rule"), // "rule" | "assumption" | "attitude"
     confidence: integer("confidence").notNull().default(20), // 0–100
     evidenceCount: integer("evidence_count").notNull().default(1),
+    // "active" | "dismissed" — dismissed rows are kept (not deleted) so
+    // re-analysis cannot resurrect a pruned or manually dismissed belief.
+    status: text("status").notNull().default("active"),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

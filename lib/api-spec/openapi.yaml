@@ -305,6 +305,48 @@ paths:
                 items:
                   $ref: "#/components/schemas/CoreSchema"
 
+  /cognitive/intermediate-beliefs/{id}:
+    delete:
+      operationId: dismissIntermediateBelief
+      tags: [cognitive]
+      summary: Dismiss an intermediate belief — soft delete; re-analysis cannot resurrect it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Dismissed
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /cognitive/core-schemas/{id}:
+    delete:
+      operationId: dismissCoreSchema
+      tags: [cognitive]
+      summary: Dismiss a core schema — soft delete; re-analysis cannot resurrect it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Dismissed
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /openai/conversations:
     get:
       operationId: listOpenaiConversations

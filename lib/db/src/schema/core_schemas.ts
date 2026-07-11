@@ -18,6 +18,10 @@ export const coreSchemasTable = pgTable(
     domain: text("domain").notNull().default("other"), // "helpless" | "unlovable" | "worthless" | "other"
     confidence: integer("confidence").notNull().default(15), // 0–100
     evidenceCount: integer("evidence_count").notNull().default(1),
+    // "active" | "dismissed" — dismissed rows are kept (not deleted) so
+    // re-analysis cannot resurrect a pruned or manually dismissed schema.
+    status: text("status").notNull().default("active"),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

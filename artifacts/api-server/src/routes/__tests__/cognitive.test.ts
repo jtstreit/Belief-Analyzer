@@ -3,7 +3,7 @@
  *
  * Dependency strategy:
  *   @workspace/db  → mocked: db is a chainable stub controlled by `mockData`
- *   @workspace/integrations-openai-ai-server → mocked: openai.chat.completions.create
+ *   @workspace/integrations-openai-ai-server → mocked: veraComplete
  *   @workspace/db (lib/logger) → pino transport silenced via env
  *
  * Table sentinel objects are shared between the mock factory and tests via
@@ -25,7 +25,7 @@ const sentinels = vi.hoisted(() => ({
 const state = vi.hoisted(() => ({
   // Per-table data returned by db.select().from(table)...
   byTable: new Map<object, unknown[]>(),
-  // Ordered OpenAI responses (one per chat.completions.create call)
+  // Ordered LLM responses (one per veraComplete call)
   openaiQueue: [] as string[],
   // Capture sink for db.insert().values() calls
   inserted: [] as Array<{ table: object; values: unknown }>,
@@ -184,13 +184,8 @@ vi.mock("@workspace/db", () => {
 
 // ─── Mock @workspace/integrations-openai-ai-server ───────────────────────────
 vi.mock("@workspace/integrations-openai-ai-server", () => {
-  const create = vi.fn(async () => {
-    const content = state.openaiQueue.shift() ?? "[]";
-    return { choices: [{ message: { content } }] };
-  });
-  return {
-    openai: { chat: { completions: { create } } },
-  };
+  const veraComplete = vi.fn(async () => state.openaiQueue.shift() ?? "[]");
+  return { veraComplete };
 });
 
 // ─── Import app after mocks are in place ─────────────────────────────────────
@@ -422,7 +417,7 @@ describe("POST /api/cognitive/analyze", () => {
 
   // ── Pass 1: events without meaningful content are marked processed eagerly ─
   it("Pass 1 — no-content events: processedAt is set without calling LLM", async () => {
-    const { openai } = await import("@workspace/integrations-openai-ai-server");
+    const { veraComplete } = await import("@workspace/integrations-openai-ai-server");
     const emptyEvent = makeTelemetryRow(1, "");    // empty text → withoutContent
     const shortEvent = makeTelemetryRow(2, "ok");  // ≤5 chars → withoutContent
     state.byTable.set(sentinels.telemetryEventsTable, [emptyEvent, shortEvent]);
@@ -433,7 +428,7 @@ describe("POST /api/cognitive/analyze", () => {
     // LLM should NOT be called for Pass 1 (no withContent events)
     // It may still be called for Pass 2/3 if there are existing thoughts,
     // but with empty DB those are skipped too.
-    const passOneCall = (openai.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls;
+    const passOneCall = (veraComplete as ReturnType<typeof vi.fn>).mock.calls;
     // All calls would be for Pass 2/3 (none for Pass 1 — no withContent)
     // With empty thoughts DB, Pass 2 also skips. So 0 total calls.
     expect(passOneCall.length).toBe(0);
@@ -606,7 +601,7 @@ describe("POST /api/cognitive/analyze", () => {
 
   // ── Pass 3: fewer than 2 beliefs → Pass 3 is skipped entirely ────────────
   it("Pass 3 — only 1 intermediate belief: LLM not called for Pass 3", async () => {
-    const { openai } = await import("@workspace/integrations-openai-ai-server");
+    const { veraComplete } = await import("@workspace/integrations-openai-ai-server");
     state.byTable.set(sentinels.intermediateBeliefsCogTable, [makeBeliefRow(1)]);
     // Pass 2 would need thoughts to trigger; leave thoughts empty so no LLM calls expected
     // (Pass 3 threshold is ≥2 beliefs)
@@ -615,13 +610,13 @@ describe("POST /api/cognitive/analyze", () => {
     expect(res.status).toBe(200);
     // No LLM calls because: no thoughts (Pass 2 skipped), <2 beliefs (Pass 3 skipped)
     expect(
-      (openai.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls,
+      (veraComplete as ReturnType<typeof vi.fn>).mock.calls,
     ).toHaveLength(0);
   });
 
   // ── Pass 2+3 run even when Pass 1 extracted nothing new ───────────────────
   it("Passes 2 and 3 run even when there are no new telemetry events", async () => {
-    const { openai } = await import("@workspace/integrations-openai-ai-server");
+    const { veraComplete } = await import("@workspace/integrations-openai-ai-server");
     // Pre-existing thoughts trigger Pass 2; pre-existing beliefs trigger Pass 3
     state.byTable.set(sentinels.automaticThoughtsTable, [
       makeThoughtRow(1),
@@ -638,7 +633,7 @@ describe("POST /api/cognitive/analyze", () => {
     expect(res.status).toBe(200);
     // LLM should have been called twice (Pass 2 + Pass 3)
     expect(
-      (openai.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls,
+      (veraComplete as ReturnType<typeof vi.fn>).mock.calls,
     ).toHaveLength(2);
   });
 

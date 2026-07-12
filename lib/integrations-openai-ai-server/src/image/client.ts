@@ -2,20 +2,27 @@ import fs from "node:fs";
 import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 
-const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL ?? "https://api.deepseek.com/v1";
-
-if (!apiKey) {
-  throw new Error("OPENAI_API_KEY must be set.");
+// Lazy, explicit-config only — no default provider (DeepSeek fallback removed).
+let client: OpenAI | null = null;
+function getClient(): OpenAI {
+  if (client) return client;
+  const apiKey =
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  if (!apiKey || !baseURL) {
+    throw new Error(
+      "Image generation needs OPENAI_API_KEY and AI_INTEGRATIONS_OPENAI_BASE_URL — there is no default provider.",
+    );
+  }
+  client = new OpenAI({ apiKey, baseURL });
+  return client;
 }
-
-export const openai = new OpenAI({ apiKey, baseURL });
 
 export async function generateImageBuffer(
   prompt: string,
   size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
 ): Promise<Buffer> {
-  const response = await openai.images.generate({
+  const response = await getClient().images.generate({
     model: "gpt-image-1",
     prompt,
     size,
@@ -37,7 +44,7 @@ export async function editImages(
     )
   );
 
-  const response = await openai.images.edit({
+  const response = await getClient().images.edit({
     model: "gpt-image-1",
     image: images,
     prompt,

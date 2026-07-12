@@ -12,7 +12,9 @@ $env:PORT = "8080"
 $env:DATABASE_URL = "postgresql://postgres@localhost:5544/belief_analyzer"
 
 # LLM — mock by default (run: node local-dev/mock-openai.cjs).
-# For live DeepSeek, replace with the real key and remove the BASE_URL override.
+# BASE_URL set   -> OpenAI-compatible backend (the mock; zero spend).
+# BASE_URL unset -> Claude Agent SDK backend (claude-opus-4-8 via the
+#                   Max-subscription OAuth token / logged-in Claude Code).
 $env:OPENAI_API_KEY = "mock-local-key"
 $env:AI_INTEGRATIONS_OPENAI_BASE_URL = "http://localhost:8090/v1"
 

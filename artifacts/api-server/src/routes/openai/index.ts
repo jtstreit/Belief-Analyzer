@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, conversations as convTable, messages as msgTable, beliefsTable, exerciseSessions, exercisesTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { veraComplete } from "@workspace/integrations-openai-ai-server";
 import {
   CreateOpenaiConversationBody,
   SendOpenaiMessageBody,
@@ -454,24 +454,19 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
+    // The OpenAI-compatible backend (local mock) streams true deltas; the
+    // Claude Agent SDK backend delivers the full reply as one chunk — the SSE
+    // contract is unchanged either way (the client accumulates `content`).
     let fullResponse = "";
-    const stream = await openai.chat.completions.create({
-      model: "deepseek-ai/DeepSeek-V4-Pro",
-      max_completion_tokens: 1024,
-      messages: [
-        { role: "system", content: systemPromptWithMemory },
-        ...chatMessages,
-      ],
-      stream: true,
-    });
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
+    await veraComplete({
+      system: systemPromptWithMemory,
+      maxTokens: 1024,
+      messages: chatMessages,
+      onDelta: (content) => {
         fullResponse += content;
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
-      }
-    }
+      },
+    });
 
     // Save assistant response
     await db.insert(msgTable).values({

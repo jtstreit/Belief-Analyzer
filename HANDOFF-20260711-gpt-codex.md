@@ -6,12 +6,16 @@ Written 2026-07-11 by Claude Code for GPT/Codex. Self-contained — assume no ot
 
 **REBT Belief Analyzer** ("REBT Companion") — Jackson's personal dual-modality (REBT/CBT)
 self-coaching app. Expo app (`artifacts/rebt-app`) + Express 5 API (`artifacts/api-server`)
-+ Drizzle/Postgres (`lib/db`) in a pnpm workspace. LLM via an OpenAI-compatible client
-(`lib/integrations-openai-ai-server`; key = `OPENAI_API_KEY`). **Plan of record
-(Jackson, 2026-07-11): Vera runs on Claude — but the code is NOT migrated yet; it still
-hardcodes `deepseek-ai/DeepSeek-V4-Pro` (5 call sites in api-server routes) and defaults
-baseURL to api.deepseek.com. Treat DeepSeek as legacy to remove; build nothing new on it.
-Migration touchpoint list + route options: `Downloads\BeliefAnalyzer_Codex_Handoff.md` §4.2.**
++ Drizzle/Postgres (`lib/db`) in a pnpm workspace. **LLM = Claude Opus 4.8 via the
+Claude Agent SDK (MIGRATED 2026-07-12; DeepSeek fully removed).** Every LLM call goes
+through `veraComplete` in `lib/integrations-openai-ai-server/src/vera.ts` — never call
+a provider client directly. Backend switch: `AI_INTEGRATIONS_OPENAI_BASE_URL` set →
+OpenAI-compatible endpoint (the local mock LLM, the verification seam); unset → Claude
+Agent SDK using the Max-subscription OAuth token (`CLAUDE_CODE_OAUTH_TOKEN` — zero API
+spend; ANTHROPIC_API_KEY is stripped from the subprocess env so it can never bill a
+pay-per-token account). Model override env: `VERA_MODEL`. **Replit secrets change on
+next pull: add `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`), remove/ignore the
+old DeepSeek `OPENAI_API_KEY`; never set `AI_INTEGRATIONS_OPENAI_BASE_URL` in prod.**
 API client is Orval-generated from
 `lib/api-spec/openapi.yaml` (`pnpm --filter @workspace/api-spec run codegen`).
 Coach persona = Vera. The LIVE instance runs on Replit (app "Belief Analyzer",
@@ -87,8 +91,8 @@ runs on real passive data instead of only manual check-ins.
 **⚠ HARD CONSTRAINTS:**
 - **PHI FILTER IS NON-NEGOTIABLE.** LifeOps telemetry includes raw screen text / SMS /
   notifications from Jackson's WORK phone usage (Credible EHR, Monarch, client content).
-  The Belief Analyzer's LLM is an external service with **no BAA — currently DeepSeek in
-  code, Claude after the planned migration; PHI must never reach it either way.** The adapter
+  The Belief Analyzer's LLM is an external service with **no BAA — Claude as of the
+  2026-07-12 migration; PHI must never reach it.** The adapter
   MUST filter clinical/work content before ingest. LifeOps already has a tested heuristic:
   `isClinicalContent` in `C:\Users\46743\sentinel-lifeops\src\lifeopsRules.ts` — reuse the
   logic (copy it into the bridge; see next bullet). Safest default: ingest only

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, beliefsTable, telemetryEventsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { veraComplete } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -101,19 +101,16 @@ For each irrational belief found, respond with a JSON array. Each item should ha
 
 Return ONLY a valid JSON array, no markdown, no explanation.`;
 
-    const response = await openai.chat.completions.create({
-      model: "deepseek-ai/DeepSeek-V4-Pro",
-      max_completion_tokens: 2000,
+    const content = await veraComplete({
+      system: systemPrompt,
+      maxTokens: 2000,
       messages: [
-        { role: "system", content: systemPrompt },
         {
           role: "user",
           content: `Analyze these journal entries for irrational beliefs:\n\n${thoughtsText}`,
         },
       ],
     });
-
-    const content = response.choices[0]?.message?.content ?? "[]";
     let detectedBeliefs: Array<{
       beliefText: string;
       beliefType: string;

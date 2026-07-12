@@ -16,7 +16,7 @@ cheap reads; always run them.
 Events with content are marked processed ONLY inside a DB transaction after thoughts are inserted.
 Events without meaningful text are marked processed eagerly (nothing to retry).
 
-**Why:** Marking ALL events processed before LLM calls means a DeepSeek failure silently
+**Why:** Marking ALL events processed before LLM calls means an LLM failure silently
 drops those events — they can never be retried. The transaction makes Pass 1 atomic:
 if insertion or the LLM call throws, the transaction rolls back and events stay retryable.
 
@@ -25,7 +25,7 @@ In `artifacts/api-server/src/routes/cognitive.ts`:
 1. Fetch unprocessed events (`isNull(processedAt)`)
 2. Split into `withContent` and `withoutContent`
 3. Mark `withoutContent` processed eagerly (no retry value)
-4. Call DeepSeek for `withContent` (let errors propagate to catch — events stay retryable)
+4. Call the LLM (`veraComplete`) for `withContent` (let errors propagate to catch — events stay retryable)
 5. `db.transaction()`: insert thoughts + mark `withContent` events processed atomically
 6. Run Pass 2 always (from DB — all thoughts)
 7. Run Pass 3 always (from DB — all intermediate beliefs)

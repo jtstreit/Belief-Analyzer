@@ -242,8 +242,8 @@ export default function PermissionsScreen() {
           <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
             Captured text is stored locally and sent to the local API server.
             When you tap "Analyse", excerpts of your thought text are sent to
-            DeepSeek — an external AI service — for cognitive pattern extraction.
-            Do not capture text you would not share with an AI provider.
+            Claude (Anthropic) — an external AI service — for cognitive pattern
+            extraction. Do not capture text you would not share with an AI provider.
             This app is a personal self-help tool, not a medical device or
             clinical service.
           </Text>

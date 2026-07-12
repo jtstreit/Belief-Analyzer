@@ -7,7 +7,7 @@ import {
   coreSchemasTable,
 } from "@workspace/db";
 import { isNull, inArray, desc, eq, sql, and, lt, lte } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { veraComplete } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -193,7 +193,7 @@ router.post("/cognitive/analyze", async (req, res) => {
 
     // ── Pass 1: extract automatic thoughts from content events ────────
     // Events in `withContent` are marked processed ONLY inside a transaction
-    // after their thoughts are successfully persisted. If DeepSeek fails or
+    // after their thoughts are successfully persisted. If the LLM fails or
     // insertion throws, the transaction rolls back and events remain
     // unprocessed so the next analyze call can retry them.
     if (withContent.length > 0) {
@@ -220,19 +220,15 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
 
       // This call can throw (network error, timeout, API error).
       // Let it propagate — the catch block returns 500 and events stay retryable.
-      const layer1Res = await openai.chat.completions.create({
-        model: "deepseek-ai/DeepSeek-V4-Pro",
-        max_completion_tokens: 3000,
-        messages: [
-          { role: "system", content: layer1System },
-          { role: "user", content: `Entries:\n${entriesText}` },
-        ],
+      const responseContent = await veraComplete({
+        system: layer1System,
+        maxTokens: 3000,
+        messages: [{ role: "user", content: `Entries:\n${entriesText}` }],
       });
 
       // Parse the LLM response — do NOT swallow parse errors.
       // If JSON.parse throws (malformed output), it propagates to the outer
       // catch, returns 500, and withContent events remain unprocessed + retryable.
-      const responseContent = layer1Res.choices[0]?.message?.content ?? "";
       const parsedResponse: unknown = JSON.parse(responseContent);
       if (!Array.isArray(parsedResponse)) {
         throw new Error(
@@ -337,13 +333,10 @@ Return a JSON array. Each object:
 
 Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
 
-      const layer2Res = await openai.chat.completions.create({
-        model: "deepseek-ai/DeepSeek-V4-Pro",
-        max_completion_tokens: 2000,
-        messages: [
-          { role: "system", content: layer2System },
-          { role: "user", content: thoughtsSummary },
-        ],
+      const layer2Text = await veraComplete({
+        system: layer2System,
+        maxTokens: 2000,
+        messages: [{ role: "user", content: thoughtsSummary }],
       });
 
       let rawBeliefs: Array<{
@@ -353,7 +346,7 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
         initialConfidence?: number;
       }> = [];
       try {
-        rawBeliefs = JSON.parse(layer2Res.choices[0]?.message?.content ?? "[]");
+        rawBeliefs = JSON.parse(layer2Text || "[]");
       } catch {
         rawBeliefs = [];
       }
@@ -433,13 +426,10 @@ Return a JSON array. Each object:
 
 Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSON array.`;
 
-      const layer3Res = await openai.chat.completions.create({
-        model: "deepseek-ai/DeepSeek-V4-Pro",
-        max_completion_tokens: 1500,
-        messages: [
-          { role: "system", content: layer3System },
-          { role: "user", content: beliefsSummary },
-        ],
+      const layer3Text = await veraComplete({
+        system: layer3System,
+        maxTokens: 1500,
+        messages: [{ role: "user", content: beliefsSummary }],
       });
 
       let rawSchemas: Array<{
@@ -449,7 +439,7 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
         initialConfidence?: number;
       }> = [];
       try {
-        rawSchemas = JSON.parse(layer3Res.choices[0]?.message?.content ?? "[]");
+        rawSchemas = JSON.parse(layer3Text || "[]");
       } catch {
         rawSchemas = [];
       }

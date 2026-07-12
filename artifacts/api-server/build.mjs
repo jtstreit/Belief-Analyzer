@@ -29,6 +29,9 @@ async function buildAll() {
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
       "*.node",
+      // Claude Agent SDK resolves its CLI binary relative to its own package dir
+      // and ships platform-specific native packages — cannot be bundled.
+      "@anthropic-ai/*",
       "sharp",
       "better-sqlite3",
       "sqlite3",

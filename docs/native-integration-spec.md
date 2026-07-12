@@ -369,9 +369,9 @@ class NativeCaptureModule : Module() {
 - No images, attachments, or notification actions are captured.
 - Captured events are stored locally in the Postgres database on the same machine.
 - **External AI disclosure:** When the user taps "Analyse" on the Mind Map screen,
-  excerpts of captured thought text are sent to DeepSeek (api.deepseek.com) for
-  cognitive pattern extraction. This is an external service outside the device.
+  excerpts of captured thought text are sent to Claude (Anthropic) for cognitive
+  pattern extraction. This is an external service outside the device.
   The app should not be used to capture sensitive personal information (passwords,
   financial data, medical records) that must not leave the device.
-- Beyond the DeepSeek API call during analysis, the app makes no other outbound
+- Beyond the Claude call during analysis, the app makes no other outbound
   network requests.

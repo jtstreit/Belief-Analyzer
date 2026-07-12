@@ -1,0 +1,26 @@
+# Render Blueprint — Belief Analyzer API (Express 5 + Claude Agent SDK)
+# Cloud-hosts artifacts/api-server so the phone app reaches Vera with the PC off.
+# LLM route: veraComplete -> Claude Agent SDK on CLAUDE_CODE_OAUTH_TOKEN (Max
+# subscription, zero API spend — same token the cbt-sentinel/lifeops services use).
+# Never set AI_INTEGRATIONS_OPENAI_BASE_URL here: that selects the OpenAI-compat
+# backend, which is the local mock-LLM verification seam only.
+services:
+  - type: web
+    name: belief-analyzer-api
+    runtime: node
+    plan: starter
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24.16.0"
+      # Max-subscription OAuth token (claude setup-token) — paste in dashboard,
+      # same value as cbt-sentinel-api / sentinel-lifeops-api.
+      - key: CLAUDE_CODE_OAUTH_TOKEN
+        sync: false
+      # Shared Render Postgres (cbt-sentinel-db) — link via "Add from database".
+      # Table namespaces verified disjoint from cbt/lifeops before first db:push.
+      - key: DATABASE_URL
+        sync: false

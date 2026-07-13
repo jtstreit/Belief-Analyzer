@@ -1,14 +1,15 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Alert, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useGetBelief, useUpdateBelief, useCreateOpenaiConversation } from '@workspace/api-client-react';
+import { getGetBeliefQueryKey, useGetBelief, useUpdateBelief, useCreateOpenaiConversation } from '@workspace/api-client-react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import Animated, { FadeInDown, useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useModality } from '@/contexts/ModalityContext';
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -20,6 +21,8 @@ const StatusButton = ({ active, onPress, colors, icon, label }: any) => {
       onPressIn={() => scale.value = withSpring(0.95)}
       onPressOut={() => scale.value = withSpring(1)}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
       <Feather name={icon as any} size={16} color={colors.foreground} />
       <Text style={[styles.outlineBtnText, { color: colors.foreground }]}>{label}</Text>
@@ -34,8 +37,12 @@ export default function BeliefDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { modality } = useModality();
+  const activeColor = modality === 'rebt' ? colors.accent : colors.cbt;
 
-  const { data: belief, isLoading, refetch } = useGetBelief(beliefId);
+  const { data: belief, isLoading, isError, refetch } = useGetBelief(beliefId, {
+    query: { queryKey: getGetBeliefQueryKey(beliefId), enabled: Number.isFinite(beliefId) },
+  });
   const updateBelief = useUpdateBelief();
   const createConversation = useCreateOpenaiConversation();
 
@@ -45,7 +52,7 @@ export default function BeliefDetailScreen() {
       let convId = belief?.conversationId;
       if (!convId) {
         const conv = await createConversation.mutateAsync({
-          data: { title: 'Challenge Belief', beliefId }
+          data: { title: 'Work on Belief', beliefId, modality }
         });
         convId = conv.id;
         await updateBelief.mutateAsync({
@@ -54,9 +61,11 @@ export default function BeliefDetailScreen() {
         });
         refetch();
       }
-      router.push(`/coach-session/${convId}`);
+      router.push(`/coach-session/${convId}?modality=${modality}`);
     } catch (e) {
       console.error(e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not start session', 'Check your connection and try again.');
     }
   };
 
@@ -70,8 +79,25 @@ export default function BeliefDetailScreen() {
       refetch();
     } catch (e) {
       console.error(e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not update belief', 'Check your connection and try again.');
     }
   };
+
+  if (!Number.isFinite(beliefId) || isError || (!isLoading && !belief)) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background, padding: 24 }]}>
+        <Feather name="alert-circle" size={28} color={colors.destructive} />
+        <Text style={[styles.errorTitle, { color: colors.foreground }]}>Belief unavailable</Text>
+        <Text style={[styles.errorText, { color: colors.mutedForeground }]}>Check your connection or return to the previous screen.</Text>
+        {Number.isFinite(beliefId) ? (
+          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: activeColor }]} onPress={() => refetch()}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
 
   if (isLoading || !belief) {
     return (
@@ -150,15 +176,15 @@ export default function BeliefDetailScreen() {
             disabled={createConversation.isPending || updateBelief.isPending}
             activeOpacity={0.8}
           >
-            <LinearGradient colors={['#F59E0B', '#D97706']} style={StyleSheet.absoluteFill} />
-            <View style={[StyleSheet.absoluteFill, { shadowColor: '#F59E0B', shadowOpacity: 0.5, shadowRadius: 10, elevation: 8 }]} />
+             <LinearGradient colors={modality === 'rebt' ? ['#D4823A', '#A86127'] : ['#4A8A9E', '#35697A']} style={StyleSheet.absoluteFill} />
+             <View style={[StyleSheet.absoluteFill, { shadowColor: activeColor, shadowOpacity: 0.5, shadowRadius: 10, elevation: 8 }]} />
             {createConversation.isPending ? (
                <ActivityIndicator color={colors.primaryForeground} />
             ) : (
               <>
                 <Feather name="message-circle" size={20} color={colors.primaryForeground} />
                 <Text style={[styles.challengeBtnText, { color: colors.primaryForeground }]}>
-                  {belief.conversationId ? 'Continue Session' : 'Challenge this belief'}
+                   {belief.conversationId ? 'Continue Session' : 'Work on this with Vera'}
                 </Text>
               </>
             )}
@@ -168,7 +194,7 @@ export default function BeliefDetailScreen() {
              {belief.status !== 'resolved' && (
                 <StatusButton 
                   icon="check" 
-                  label="Mark Resolved" 
+                   label="Mark Less Active"
                   colors={colors} 
                   onPress={() => handleToggleStatus('resolved')} 
                 />
@@ -192,6 +218,10 @@ export default function BeliefDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold', marginTop: 12 },
+  errorText: { fontSize: 14, fontFamily: 'Inter_400Regular', marginTop: 6, textAlign: 'center' },
+  retryBtn: { marginTop: 18, minHeight: 48, paddingHorizontal: 24, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  retryText: { color: '#000', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   content: { padding: 20, gap: 24, paddingTop: 32 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },

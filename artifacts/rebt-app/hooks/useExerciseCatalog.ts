@@ -19,8 +19,24 @@ export function useExerciseCatalog(): {
     return { exercises: EXERCISE_CATALOG, isLoading: false, isFallback: true };
   }
 
+  const serverExercises = (data as unknown as Exercise[]) ?? [];
+  const bundledById = new Map(EXERCISE_CATALOG.map((exercise) => [exercise.id, exercise]));
+  const exercises = serverExercises.map((exercise) => {
+    const reviewed = bundledById.get(exercise.id);
+    if (!reviewed) return exercise;
+
+    // Safety-sensitive instructions ship with the mobile release rather than
+    // depending on a database seed completing before the app is installed.
+    return {
+      ...exercise,
+      rationale: reviewed.rationale,
+      caution: reviewed.caution,
+      steps: reviewed.steps,
+    };
+  });
+
   return {
-    exercises: (data as unknown as Exercise[]) ?? [],
+    exercises,
     isLoading,
     isFallback: false,
   };

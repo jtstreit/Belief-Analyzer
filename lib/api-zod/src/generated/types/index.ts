@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './analyzePatternsInput';
+export * from './analyzePatternsInputModality';
 export * from './apiError';
 export * from './automaticThought';
 export * from './belief';

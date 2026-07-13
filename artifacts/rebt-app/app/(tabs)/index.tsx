@@ -58,8 +58,8 @@ export default function TabOneScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { data: beliefs, isLoading: isBeliefsLoading, refetch: refetchBeliefs } = useListBeliefs({ status: 'active' }, { query: { queryKey: getListBeliefsQueryKey({ status: 'active' }) } });
-  const { data: patterns, isLoading: isPatternsLoading, refetch: refetchPatterns } = useGetPatterns();
+  const { data: beliefs, isLoading: isBeliefsLoading, isError: beliefsError, refetch: refetchBeliefs } = useListBeliefs({ status: 'active' }, { query: { queryKey: getListBeliefsQueryKey({ status: 'active' }) } });
+  const { data: patterns, isLoading: isPatternsLoading, isError: patternsError, refetch: refetchPatterns } = useGetPatterns();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -102,7 +102,16 @@ export default function TabOneScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Beliefs</Text>
-          {beliefs && beliefs.length > 0 ? (
+          {beliefsError || patternsError ? (
+            <TouchableOpacity
+              style={[styles.errorCard, { backgroundColor: colors.card, borderColor: colors.destructive }]}
+              onPress={onRefresh}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading home data"
+            >
+              <Text style={[styles.emptyText, { color: colors.foreground }]}>Could not load your data. Tap to try again.</Text>
+            </TouchableOpacity>
+          ) : beliefs && beliefs.length > 0 ? (
             beliefs.slice(0, 3).map((belief, index) => (
               <Animated.View key={belief.id} entering={SlideInDown.delay(200 + index * 80).duration(500).springify()}>
                 <TouchableOpacity
@@ -120,7 +129,7 @@ export default function TabOneScreen() {
             ))
           ) : (
             <Animated.Text entering={FadeIn.delay(300)} style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              No active beliefs right now. Great job!
+              No active beliefs tracked yet. Log a check-in or start a Vera session when you're ready.
             </Animated.Text>
           )}
         </View>
@@ -154,6 +163,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textTransform: 'capitalize' },
   beliefText: { fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
   emptyText: { fontSize: 16, fontFamily: 'Inter_400Regular' },
+  errorCard: { padding: 16, borderRadius: 14, borderWidth: 1 },
   ctaWrapper: { marginTop: 16 },
   ctaButton: { padding: 18, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   ctaText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },

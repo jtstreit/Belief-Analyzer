@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Alert, StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListOpenaiConversations, useCreateOpenaiConversation } from '@workspace/api-client-react';
@@ -60,7 +60,7 @@ export default function CoachScreen() {
   const activeColor = modality === 'rebt' ? colors.accent : colors.cbt;
   const modalityLabel = MODALITY_LABELS[modality];
 
-  const { data: conversations, isLoading, refetch } = useListOpenaiConversations();
+  const { data: conversations, isLoading, isError, refetch } = useListOpenaiConversations();
   const createConversation = useCreateOpenaiConversation();
 
   const handleNewSession = async () => {
@@ -72,6 +72,8 @@ export default function CoachScreen() {
       router.push(`/coach-session/${conv.id}?modality=${modality}`);
     } catch (e) {
       console.error(e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not start session', 'Check your connection and try again.');
     }
   };
 
@@ -118,11 +120,17 @@ export default function CoachScreen() {
         </Text>
       </View>
 
-      {isLoading ? (
+       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={activeColor} />
         </View>
-      ) : conversations && conversations.length > 0 ? (
+       ) : isError ? (
+         <TouchableOpacity style={styles.emptyContainer} onPress={() => refetch()} accessibilityRole="button">
+           <Feather name="alert-circle" size={32} color={colors.destructive} />
+           <Text style={[styles.emptyText, { color: colors.foreground }]}>Could not load sessions</Text>
+           <Text style={[styles.emptySubtext, { color: colors.mutedForeground }]}>Tap to try again.</Text>
+         </TouchableOpacity>
+       ) : conversations && conversations.length > 0 ? (
         <FlatList
           data={conversations}
           keyExtractor={(item) => item.id.toString()}
@@ -158,7 +166,9 @@ export default function CoachScreen() {
           <TouchableOpacity
             style={[styles.newSessionButton, { backgroundColor: activeColor }]}
             onPress={handleNewSession}
-            disabled={createConversation.isPending}
+           disabled={createConversation.isPending}
+           accessibilityRole="button"
+           accessibilityLabel={`Start new ${modalityLabel.short} session`}
           >
             {createConversation.isPending ? (
               <ActivityIndicator color="#fff" />
@@ -185,7 +195,7 @@ const styles = StyleSheet.create({
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   modalityDot: { width: 7, height: 7, borderRadius: 4 },
   subtitle: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  settingsBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  settingsBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   contextCard: {
     marginHorizontal: 20, marginBottom: 16, borderRadius: 14, borderWidth: 1,
     padding: 14, flexDirection: 'row', gap: 10, alignItems: 'flex-start',

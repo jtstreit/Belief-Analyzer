@@ -9,6 +9,18 @@ export interface HealthStatus {
   status: string;
 }
 
+export type AnalyzePatternsInputModality = typeof AnalyzePatternsInputModality[keyof typeof AnalyzePatternsInputModality];
+
+
+export const AnalyzePatternsInputModality = {
+  rebt: 'rebt',
+  cbt: 'cbt',
+} as const;
+
+export interface AnalyzePatternsInput {
+  modality: AnalyzePatternsInputModality;
+}
+
 export interface TelemetryEvent {
   id: number;
   type: string;

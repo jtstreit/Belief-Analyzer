@@ -114,7 +114,7 @@
     "evidenceBase": "Ellis, A. & MacLaren, C. (1998). Rational Emotive Behavior Therapy: A Therapist's Guide.",
     "rationale": "By deliberately doing something mildly embarrassing in public and tolerating the discomfort without negative self-rating, you prove to yourself that you can cope and that others' disapproval is not catastrophic.",
     "estimatedMinutes": 20,
-    "caution": "Choose tasks that are harmless to others and legal. Avoid tasks that could be genuinely offensive or dangerous.",
+    "caution": "Choose tasks that are harmless to others and legal. Avoid anything offensive, dangerous, or likely to threaten your job or safety. If trauma, psychosis, or severe social anxiety is active, use this only with a trained clinician.",
     "icon": "shield",
     "steps": [
       {
@@ -195,6 +195,7 @@
     ],
     "evidenceBase": "Maultsby, M.C. & Ellis, A. (1974). Technique of rational emotive imagery.",
     "rationale": "By vividly imagining a feared situation and practising shifting from an unhealthy emotion (panic, rage, depression) to a healthy but still negative one (concern, annoyance, sadness), you develop emotional flexibility and tolerance.",
+    "caution": "Skip or stop if intense imagery feels overwhelming, triggers trauma, or causes dissociation. This practice is optional. Seek immediate support if self-harm thoughts are strong.",
     "estimatedMinutes": 10,
     "icon": "eye",
     "steps": [
@@ -208,7 +209,7 @@
       {
         "id": "unhealthyEmotion",
         "title": "Identify the unhealthy emotion",
-        "instruction": "What unhealthy emotion do you feel when you vividly imagine this situation? (e.g., depression, panic, rage, self-loathing)",
+        "instruction": "What intense emotion shows up when you imagine this situation (for example panic, rage, deep sadness, or shame)? Use words that fit without forcing self-hatred language.",
         "type": "multiline",
         "placeholder": "e.g., Deep depression and self-hatred (9/10)."
       },
@@ -460,6 +461,7 @@
     ],
     "evidenceBase": "Burns, D.D. (1980). Feeling Good. Freeman, A. & DeWolf, R. (1989).",
     "rationale": "Surface automatic thoughts rest on deeper intermediate and core beliefs. The downward arrow repeatedly asks \"What would that mean about me?\" to reach the schema driving distress.",
+    "caution": "You do not need to complete every arrow step. Stop if this exercise intensifies hopelessness or self-harm thoughts, and use crisis resources or professional support.",
     "estimatedMinutes": 12,
     "icon": "arrow-down",
     "steps": [
@@ -619,6 +621,7 @@
     ],
     "evidenceBase": "Martell, C., Addis, M., & Jacobson, N. (2001). Depression in Context: Strategies for Guided Action.",
     "rationale": "Withdrawal from meaningful activities deepens and maintains low mood. Scheduling valued activities — including both mastery (achievement) and pleasure tasks — breaks the cycle by reconnecting you with life.",
+    "caution": "Start with very small steps. If mood is severely low, you have self-harm thoughts, or increased activity feels unusually driven or unsafe, contact a clinician or crisis service instead of pushing a full schedule.",
     "estimatedMinutes": 15,
     "icon": "calendar",
     "steps": [
@@ -776,9 +779,9 @@
       "social_anxiety"
     ],
     "evidenceBase": "Craske, M.G. (2015). Optimizing Inhibitory Learning During Exposure Therapy. Behaviour Research and Therapy.",
-    "rationale": "Repeated, prolonged exposure (staying in the situation until anxiety reduces by at least 50%) teaches your nervous system that the feared outcome either does not happen or is manageable.",
+    "rationale": "Graded exposure means approaching feared situations step by step, long enough to test a prediction and learn that anxiety can be tolerated. Learning can occur even when anxiety does not fully drop during practice.",
     "estimatedMinutes": 30,
-    "caution": "Stay in the situation until your SUDS drops meaningfully. Leaving early (escape) can strengthen anxiety. Remove safety behaviours during the session.",
+    "caution": "Stop immediately if you are in real danger, become dissociated, or feel unsafe. Exposure is optional self-help practice, not a requirement. For OCD, trauma-related symptoms, or panic with medical concerns, work with a trained clinician first. Reduce safety behaviours when appropriate, but never force yourself to stay.",
     "icon": "clock",
     "steps": [
       {

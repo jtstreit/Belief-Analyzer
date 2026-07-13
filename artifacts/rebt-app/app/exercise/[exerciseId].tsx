@@ -1,11 +1,11 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, ScrollView, TextInput,
-  TouchableOpacity, ActivityIndicator, Alert,
+  TouchableOpacity, ActivityIndicator, Alert, BackHandler,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -110,7 +110,7 @@ function RatingStep({
 function SudsStep({
   step, value, onChange, colors, activeColor,
 }: { step: ExerciseStep; value: number | null; onChange: (v: number) => void; colors: any; activeColor: string }) {
-  const BUCKETS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const BUCKETS = [0, 20, 40, 60, 80, 100];
   const LABELS: Record<number, string> = { 0: 'None', 25: 'Mild', 50: 'Moderate', 75: 'Strong', 100: 'Extreme' };
   return (
     <View style={styles.sudsContainer}>
@@ -124,16 +124,19 @@ function SudsStep({
           return (
             <TouchableOpacity
               key={n}
-              style={[
-                styles.sudsTick,
-                {
-                  backgroundColor: active ? activeColor : colors.muted,
-                  height: 6 + (n / 100) * 24,
-                  borderRadius: 4,
-                },
-              ]}
+              style={styles.sudsTick}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onChange(n); }}
-            />
+              accessibilityRole="button"
+              accessibilityLabel={`Set rating to ${n}`}
+              accessibilityState={{ selected: active }}
+            >
+              <View style={{
+                width: '100%',
+                backgroundColor: active ? activeColor : colors.muted,
+                height: 8 + (n / 100) * 24,
+                borderRadius: 4,
+              }} />
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -167,6 +170,7 @@ export default function ExerciseScreen() {
   const [showMoodBefore, setShowMoodBefore] = useState(true);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [completed, setCompleted] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -174,11 +178,31 @@ export default function ExerciseScreen() {
   const updateSession = useUpdateExerciseSession();
   const createConversation = useCreateOpenaiConversation();
 
-  const activeColor = modality === 'rebt' ? '#F59E0B' : '#6366F1';
+  const activeColor = modality === 'rebt' ? colors.accent : colors.cbt;
 
   const setAnswer = useCallback((stepId: string, val: string | number) => {
     setAnswers(prev => ({ ...prev, [stepId]: val }));
   }, []);
+
+  const confirmLeave = useCallback(() => {
+    Alert.alert('Leave exercise?', 'Your latest unsaved progress may be lost.', [
+      { text: 'Stay', style: 'cancel' },
+      { text: 'Leave', style: 'destructive', onPress: () => router.back() },
+    ]);
+  }, [router]);
+
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showMoodBefore || completed) return false;
+      if (stepIndex > 0) {
+        setStepIndex((i) => i - 1);
+        return true;
+      }
+      confirmLeave();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [completed, confirmLeave, showMoodBefore, stepIndex]));
 
   if (!exercise) {
     return (
@@ -217,7 +241,7 @@ export default function ExerciseScreen() {
             <Text style={[styles.exerciseTitle, { color: colors.foreground }]}>{exercise.title}</Text>
             <Text style={[styles.exerciseSubtitle, { color: colors.mutedForeground }]}>{exercise.subtitle}</Text>
             <View style={[styles.rationaleBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.rationaleLabel, { color: activeColor }]}>Why this works</Text>
+              <Text style={[styles.rationaleLabel, { color: activeColor }]}>Why this can help</Text>
               <Text style={[styles.rationaleText, { color: colors.mutedForeground }]}>{exercise.rationale}</Text>
             </View>
             {exercise.caution && (
@@ -238,14 +262,19 @@ export default function ExerciseScreen() {
             />
             <TouchableOpacity
               style={[styles.primaryBtn, { backgroundColor: moodBefore !== null ? activeColor : colors.muted }]}
-              disabled={moodBefore === null}
+              disabled={moodBefore === null || createSession.isPending}
               onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                const s = await createSession.mutateAsync({
-                  data: { exerciseId: exercise.id, modality, moodBefore: moodBefore!, completed: false },
-                });
-                setSessionId(s.id);
-                setShowMoodBefore(false);
+                try {
+                  const s = await createSession.mutateAsync({
+                    data: { exerciseId: exercise.id, modality, moodBefore: moodBefore!, completed: false },
+                  });
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setSessionId(s.id);
+                  setShowMoodBefore(false);
+                } catch {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  Alert.alert('Could not start exercise', 'Check your connection and try again.');
+                }
               }}
             >
               {createSession.isPending ? (
@@ -278,17 +307,52 @@ export default function ExerciseScreen() {
     };
 
     const handleFinish = async (returnToCoach: boolean) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      if (sessionId && moodAfterVal !== null) {
-        await updateSession.mutateAsync({ id: sessionId, data: { moodAfter: moodAfterVal } });
+      if (finishing) return;
+      setFinishing(true);
+      try {
+        if (moodAfterVal !== null) {
+          if (!sessionId) throw new Error('Missing exercise session');
+          await updateSession.mutateAsync({ id: sessionId, data: { moodAfter: moodAfterVal } });
+        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        if (returnToCoach && returnConvId) {
+          const ctx = encodeURIComponent(buildExerciseContext());
+          router.replace(
+            `/coach-session/${returnConvId}?modality=${returnModality ?? modality}&exerciseContext=${ctx}` as any
+          );
+        } else {
+          router.back();
+        }
+      } catch {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Could not save your rating', 'Check your connection and try again.');
+      } finally {
+        setFinishing(false);
       }
-      if (returnToCoach && returnConvId) {
+    };
+
+    const handleDiscuss = async () => {
+      if (finishing) return;
+      setFinishing(true);
+      try {
+        if (moodAfterVal !== null) {
+          if (!sessionId) throw new Error('Missing exercise session');
+          await updateSession.mutateAsync({ id: sessionId, data: { moodAfter: moodAfterVal } });
+        }
+        const conv = await createConversation.mutateAsync({
+          data: {
+            title: `After ${exercise.title} — ${new Date().toLocaleDateString()}`,
+            modality,
+          },
+        });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         const ctx = encodeURIComponent(buildExerciseContext());
-        router.replace(
-          `/coach-session/${returnConvId}?modality=${returnModality ?? modality}&exerciseContext=${ctx}` as any
-        );
-      } else {
-        router.back();
+        router.replace(`/coach-session/${conv.id}?modality=${modality}&exerciseContext=${ctx}` as any);
+      } catch {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Could not start coach session', 'Your exercise is saved. Check your connection and try again.');
+      } finally {
+        setFinishing(false);
       }
     };
 
@@ -332,6 +396,7 @@ export default function ExerciseScreen() {
                 <TouchableOpacity
                   style={[styles.primaryBtn, { backgroundColor: activeColor }]}
                   onPress={() => handleFinish(true)}
+                  disabled={finishing}
                 >
                   {updateSession.isPending ? (
                     <ActivityIndicator color="#000" />
@@ -345,6 +410,7 @@ export default function ExerciseScreen() {
                 <TouchableOpacity
                   style={styles.ghostBtn}
                   onPress={() => handleFinish(false)}
+                  disabled={finishing}
                 >
                   <Text style={[styles.ghostBtnText, { color: colors.mutedForeground }]}>Done</Text>
                 </TouchableOpacity>
@@ -354,6 +420,7 @@ export default function ExerciseScreen() {
                 <TouchableOpacity
                   style={[styles.primaryBtn, { backgroundColor: activeColor }]}
                   onPress={() => handleFinish(false)}
+                  disabled={finishing}
                 >
                   {updateSession.isPending ? (
                     <ActivityIndicator color="#000" />
@@ -363,29 +430,10 @@ export default function ExerciseScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.ghostBtn}
-                  disabled={createConversation.isPending}
-                  onPress={async () => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    if (sessionId && moodAfterVal !== null) {
-                      await updateSession.mutateAsync({ id: sessionId, data: { moodAfter: moodAfterVal } });
-                    }
-                    try {
-                      const conv = await createConversation.mutateAsync({
-                        data: {
-                          title: `After ${exercise.title} — ${new Date().toLocaleDateString()}`,
-                          modality,
-                        },
-                      });
-                      const ctx = encodeURIComponent(buildExerciseContext());
-                      router.replace(
-                        `/coach-session/${conv.id}?modality=${modality}&exerciseContext=${ctx}` as any
-                      );
-                    } catch {
-                      router.push('/coach' as any);
-                    }
-                  }}
+                  disabled={finishing || createConversation.isPending}
+                  onPress={handleDiscuss}
                 >
-                  {createConversation.isPending ? (
+                  {finishing || createConversation.isPending ? (
                     <ActivityIndicator color={colors.mutedForeground} size="small" />
                   ) : (
                     <>
@@ -415,13 +463,15 @@ export default function ExerciseScreen() {
       // Save and complete
       setSaving(true);
       try {
-        if (sessionId) {
-          await updateSession.mutateAsync({
-            id: sessionId,
-            data: { stepData: answers, completed: true },
-          });
-        }
+        if (!sessionId) throw new Error('Missing exercise session');
+        await updateSession.mutateAsync({
+          id: sessionId,
+          data: { stepData: answers, completed: true },
+        });
         setCompleted(true);
+      } catch {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Could not save exercise', 'Your answers are still on this screen. Check your connection and try again.');
       } finally {
         setSaving(false);
       }
@@ -435,9 +485,9 @@ export default function ExerciseScreen() {
   };
 
   const canProceed = currentStep!.type === 'info'
-    || currentStep!.type === 'multiline'
-    || currentStep!.type === 'text'
-    || currentValue !== undefined;
+    || ((currentStep!.type === 'multiline' || currentStep!.type === 'text')
+      ? typeof currentValue === 'string' && currentValue.trim().length > 0
+      : currentValue !== undefined);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -448,7 +498,7 @@ export default function ExerciseScreen() {
             if (stepIndex > 0) {
               setStepIndex(i => i - 1);
             } else {
-              router.back();
+              confirmLeave();
             }
           }}
           style={styles.backBtn}
@@ -552,7 +602,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20,
     paddingBottom: 12, gap: 12,
   },
-  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   progressContainer: { flex: 1, gap: 4 },
   progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 2 },
@@ -579,15 +629,15 @@ const styles = StyleSheet.create({
   choiceText: { fontSize: 14, fontFamily: 'Inter_400Regular', flex: 1, lineHeight: 20 },
   ratingContainer: { gap: 12 },
   ratingRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  ratingTick: { width: 38, height: 38, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  ratingTick: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   ratingTickText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   ratingLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   ratingLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   sudsContainer: { alignItems: 'center', gap: 8 },
   sudsValue: { fontSize: 48, fontFamily: 'Inter_700Bold' },
   sudsSubtext: { fontSize: 13, fontFamily: 'Inter_400Regular' },
-  sudsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 40 },
-  sudsTick: { flex: 1 },
+  sudsRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8, height: 48 },
+  sudsTick: { flex: 1, minHeight: 48, justifyContent: 'flex-end' },
   sudsRowLabels: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
   sudsRangeLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   bottomBar: {

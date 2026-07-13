@@ -120,12 +120,15 @@ export default function LibraryScreen() {
         <View>
           <Text style={[styles.title, { color: colors.foreground }]}>Library</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Evidence-based exercises
+             Exercises drawn from established REBT/CBT methods
           </Text>
         </View>
-        <TouchableOpacity
+         <TouchableOpacity
           style={[styles.toggleBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
-          onPress={() => setShowAll(v => !v)}
+           onPress={() => setShowAll(v => !v)}
+           accessibilityRole="button"
+           accessibilityLabel="Toggle exercise modality filter"
+           accessibilityState={{ selected: showAll }}
         >
           <Text style={[styles.toggleText, { color: showAll ? colors.foreground : colors.mutedForeground }]}>
             {showAll ? 'All' : MODALITY_LABELS[modality].short}
@@ -152,7 +155,10 @@ export default function LibraryScreen() {
                   borderColor: isActive ? activeColor : colors.border,
                 },
               ]}
-              onPress={() => setIssueFilter(issue)}
+               onPress={() => setIssueFilter(issue)}
+               accessibilityRole="button"
+               accessibilityLabel={`Filter by ${label}`}
+               accessibilityState={{ selected: isActive }}
             >
               <Text style={[styles.chipText, { color: isActive ? colors.primaryForeground : colors.mutedForeground }]}>
                 {label}
@@ -181,7 +187,10 @@ export default function LibraryScreen() {
                   borderColor: isActive ? colors.accent : colors.border,
                 },
               ]}
-              onPress={() => setCategoryFilter(cat)}
+               onPress={() => setCategoryFilter(cat)}
+               accessibilityRole="button"
+               accessibilityLabel={`Filter by ${label}`}
+               accessibilityState={{ selected: isActive }}
             >
               <Text style={[styles.chipText, { color: isActive ? '#fff' : colors.mutedForeground }]}>
                 {label}
@@ -242,7 +251,8 @@ const styles = StyleSheet.create({
   filterScroll: { maxHeight: 44, marginBottom: 4 },
   filterRow: { paddingHorizontal: 20, gap: 8, paddingVertical: 6 },
   chip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+    paddingHorizontal: 12, minHeight: 44, borderRadius: 22, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
   },
   chipText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   resultCount: { fontSize: 12, fontFamily: 'Inter_400Regular', paddingHorizontal: 20, marginBottom: 8 },

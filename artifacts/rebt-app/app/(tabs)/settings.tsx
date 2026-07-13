@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useModality, MODALITY_LABELS, type Modality } from '@/contexts/ModalityContext';
+import { useRouter } from 'expo-router';
 
 function SectionHeader({ label, colors }: { label: string; colors: any }) {
   return (
@@ -76,16 +77,39 @@ export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { modality, setModality } = useModality();
+  const router = useRouter();
 
-  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
+  const activeColor = modality === 'rebt' ? colors.accent : colors.cbt;
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.title, { color: colors.foreground }]}>Settings</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>More</Text>
+
+      <Animated.View entering={FadeInDown.springify()}>
+        <SectionHeader label="TOOLS" colors={colors} />
+        <View style={styles.toolRow}>
+          {[
+            { label: 'Mind Map', icon: 'layers', route: '/(tabs)/mindmap' },
+            { label: 'Feed', icon: 'activity', route: '/(tabs)/feed' },
+            { label: 'Progress', icon: 'trending-up', route: '/(tabs)/progress' },
+          ].map((tool) => (
+            <TouchableOpacity
+              key={tool.label}
+              style={[styles.toolCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => router.push(tool.route as any)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${tool.label}`}
+            >
+              <Feather name={tool.icon as any} size={21} color={activeColor} />
+              <Text style={[styles.toolLabel, { color: colors.foreground }]}>{tool.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
 
       {/* Modality selector */}
       <Animated.View entering={FadeInDown.delay(100).springify()}>
@@ -93,6 +117,10 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
           Chooses your coach's framework, language, and which exercises are highlighted.
           You can switch at any time — your history is always kept.
+        </Text>
+        <Text style={[styles.sectionDesc, { color: colors.mutedForeground }]}>
+          Belief Analyzer is the dual-modality successor to CBT Sentinel. Coach language,
+          exercises, and recommendations follow the framework you select.
         </Text>
 
         <OptionCard
@@ -108,7 +136,7 @@ export default function SettingsScreen() {
         <OptionCard
           modality="cbt"
           active={modality === 'cbt'}
-          activeColor={(colors as any).cbt}
+          activeColor={colors.cbt}
           colors={colors}
           onPress={() => setModality('cbt')}
         />
@@ -158,9 +186,10 @@ export default function SettingsScreen() {
           <Feather name="alert-triangle" size={16} color={colors.destructive} style={{ marginTop: 2 }} />
           <Text style={[styles.disclaimerText, { color: colors.foreground }]}>
             This app is a <Text style={{ fontFamily: 'Inter_700Bold' }}>self-help tool</Text>, not
-            therapy or a medical device. It cannot diagnose or treat mental health conditions.
-            If you are in crisis or need professional support, please reach out to a qualified therapist
-            or a crisis service.
+            therapy, crisis care, or a medical device. It cannot diagnose or treat mental health conditions.
+            Coach replies and analyses are AI-generated and can be wrong. Relevant text is sent to this
+            app's Render backend and Claude (Anthropic). If you are in crisis or need professional support,
+            contact emergency services, a qualified therapist, or a crisis service.
           </Text>
         </View>
       </Animated.View>
@@ -173,7 +202,7 @@ export default function SettingsScreen() {
             { name: 'International Association for Suicide Prevention', url: 'https://www.iasp.info/resources/Crisis_Centres/' },
             { name: 'Crisis Text Line (US/UK/IE/CA)', url: 'https://www.crisistextline.org' },
             { name: 'Samaritans (UK & Ireland): 116 123', url: 'tel:116123' },
-            { name: 'National Suicide Prevention Lifeline (US): 988', url: 'tel:988' },
+            { name: '988 Suicide & Crisis Lifeline (US/Canada): 988', url: 'tel:988' },
           ].map((r) => (
             <TouchableOpacity key={r.name} onPress={() => Linking.openURL(r.url)} style={styles.crisisLink}>
               <Feather name="external-link" size={14} color={colors.accent} />
@@ -209,6 +238,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20 },
   title: { fontSize: 32, fontFamily: 'Inter_700Bold', marginBottom: 24 },
+  toolRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
+  toolCard: { flex: 1, minHeight: 76, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  toolLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
   sectionHeader: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1.2, marginBottom: 8 },
   sectionDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18, marginBottom: 16 },
   optionCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 12 },

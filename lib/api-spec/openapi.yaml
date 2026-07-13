@@ -213,6 +213,12 @@ paths:
       operationId: analyzePatterns
       tags: [patterns]
       summary: Trigger LLM analysis of recent telemetry to detect belief patterns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzePatternsInput"
       responses:
         "200":
           description: Detected beliefs from telemetry
@@ -607,6 +613,15 @@ components:
           type: string
       required:
         - status
+
+    AnalyzePatternsInput:
+      type: object
+      properties:
+        modality:
+          type: string
+          enum: [rebt, cbt]
+      required:
+        - modality
 
     TelemetryEvent:
       type: object

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
@@ -170,6 +171,7 @@ export default function ProgressScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const { data, isLoading, refetch } = useGetProgress();
   const { data: pastSessions } = useListExerciseSessions(
     { completed: true },
@@ -203,7 +205,7 @@ export default function ProgressScreen() {
 
   const maxModality = Math.max(...(data?.exercisesByModality ?? []).map((m) => m.count), 1);
   const maxType     = Math.max(...(data?.exercisesByType ?? []).map((t) => t.count), 1);
-  const chartWidth  = 340;
+  const chartWidth  = Math.max(240, windowWidth - 72);
 
   if (isLoading) {
     return (

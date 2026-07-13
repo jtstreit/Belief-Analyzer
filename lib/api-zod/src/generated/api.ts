@@ -198,6 +198,10 @@ export const GetPatternsResponse = zod.object({
 /**
  * @summary Trigger LLM analysis of recent telemetry to detect belief patterns
  */
+export const AnalyzePatternsBody = zod.object({
+  "modality": zod.enum(['rebt', 'cbt'])
+})
+
 export const AnalyzePatternsResponseItem = zod.object({
   "id": zod.number(),
   "beliefText": zod.string(),

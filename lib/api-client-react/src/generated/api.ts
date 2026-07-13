@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AnalyzePatternsInput,
   ApiError,
   AutomaticThought,
   Belief,
@@ -773,14 +774,14 @@ export const getAnalyzePatternsUrl = () => {
 /**
  * @summary Trigger LLM analysis of recent telemetry to detect belief patterns
  */
-export const analyzePatterns = async ( options?: RequestInit): Promise<Belief[]> => {
+export const analyzePatterns = async (analyzePatternsInput: AnalyzePatternsInput, options?: RequestInit): Promise<Belief[]> => {
 
   return customFetch<Belief[]>(getAnalyzePatternsUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(analyzePatternsInput)
   }
 );}
 
@@ -789,8 +790,8 @@ export const analyzePatterns = async ( options?: RequestInit): Promise<Belief[]>
 
 
 export const getAnalyzePatternsMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzePatterns>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof analyzePatterns>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzePatterns>>, TError,{data: BodyType<AnalyzePatternsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzePatterns>>, TError,{data: BodyType<AnalyzePatternsInput>}, TContext> => {
 
 const mutationKey = ['analyzePatterns'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -802,10 +803,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzePatterns>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzePatterns>>, {data: BodyType<AnalyzePatternsInput>}> = (props) => {
+          const {data} = props ?? {};
 
-
-          return  analyzePatterns(requestOptions)
+          return  analyzePatterns(data,requestOptions)
         }
 
 
@@ -816,18 +817,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type AnalyzePatternsMutationResult = NonNullable<Awaited<ReturnType<typeof analyzePatterns>>>
-
+    export type AnalyzePatternsMutationBody = BodyType<AnalyzePatternsInput>
     export type AnalyzePatternsMutationError = ErrorType<unknown>
 
     /**
  * @summary Trigger LLM analysis of recent telemetry to detect belief patterns
  */
 export const useAnalyzePatterns = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzePatterns>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzePatterns>>, TError,{data: BodyType<AnalyzePatternsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof analyzePatterns>>,
         TError,
-        void,
+        {data: BodyType<AnalyzePatternsInput>},
         TContext
       > => {
       return useMutation(getAnalyzePatternsMutationOptions(options));

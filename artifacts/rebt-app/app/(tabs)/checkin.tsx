@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Linking, Modal, ScrollView } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useCreateTelemetry, useAnalyzePatterns, useCreateOpenaiConversation } f
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, ZoomIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withSpring } from 'react-native-reanimated';
+import { useModality } from '@/contexts/ModalityContext';
 
 const MOODS = [
   { value: 'Great', icon: 'sun' },
@@ -35,7 +36,14 @@ const MoodPill = ({ m, isSelected, onPress, colors }: any) => {
 
   return (
     <Animated.View style={[styles.moodButtonContainer, animatedStyle]}>
-      <TouchableOpacity activeOpacity={0.8} style={styles.moodButtonInner} onPress={onPress}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        style={styles.moodButtonInner}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Mood: ${m.value}`}
+        accessibilityState={{ selected: isSelected }}
+      >
         <View style={[StyleSheet.absoluteFill, { backgroundColor: isSelected ? colors.primary : colors.card, borderRadius: 16 }]} />
         <Feather name={m.icon as any} size={24} color={isSelected ? colors.primaryForeground : colors.mutedForeground} />
         <Text style={[styles.moodText, { color: isSelected ? colors.primaryForeground : colors.mutedForeground }]}>{m.value}</Text>
@@ -48,6 +56,7 @@ export default function CheckInScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { modality } = useModality();
 
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [thought, setThought] = useState('');
@@ -55,43 +64,60 @@ export default function CheckInScreen() {
   const [analyzedBeliefs, setAnalyzedBeliefs] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [checkinError, setCheckinError] = useState<string | null>(null);
+  const [telemetrySaved, setTelemetrySaved] = useState(false);
 
   const createTelemetry = useCreateTelemetry();
   const analyzePatterns = useAnalyzePatterns();
   const createConversation = useCreateOpenaiConversation();
 
+  const closeResults = () => {
+    setShowModal(false);
+    setThought('');
+    setSelectedMood(null);
+    setTelemetrySaved(false);
+  };
+
   const handleAnalyze = async () => {
     if (!thought.trim() && !selectedMood) return;
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsAnalyzing(true);
     setCheckinError(null);
+    let saved = telemetrySaved;
 
     try {
-      await createTelemetry.mutateAsync({
-        data: {
-          type: 'mood_checkin',
-          mood: selectedMood || undefined,
-          thoughtText: thought.trim() || undefined,
-        },
-      });
+      if (!saved) {
+        await createTelemetry.mutateAsync({
+          data: {
+            type: 'mood_checkin',
+            mood: selectedMood || undefined,
+            thoughtText: thought.trim() || undefined,
+          },
+        });
+        saved = true;
+        setTelemetrySaved(true);
+      }
 
       if (thought.trim()) {
-        const beliefs = await analyzePatterns.mutateAsync();
+        const beliefs = await analyzePatterns.mutateAsync({ data: { modality } });
         if (beliefs && beliefs.length > 0) {
           setAnalyzedBeliefs(beliefs);
           setShowModal(true);
         } else {
           setThought('');
           setSelectedMood(null);
+          setTelemetrySaved(false);
         }
       } else {
         setThought('');
         setSelectedMood(null);
+        setTelemetrySaved(false);
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      // A silent failure looked identical to a successful save — surface it.
-      setCheckinError('Something went wrong saving or analyzing your check-in. Your text is still here — try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setCheckinError(saved
+        ? 'Your check-in was saved, but analysis did not finish. Try analysis again when you are connected.'
+        : 'Your check-in could not be saved. Your text is still here — check your connection and try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -104,14 +130,17 @@ export default function CheckInScreen() {
         data: {
           title: 'Challenge Belief',
           beliefId: beliefId,
+          modality,
         }
       });
       setShowModal(false);
       setThought('');
       setSelectedMood(null);
-      router.push(`/coach-session/${conv.id}`);
+      setTelemetrySaved(false);
+      router.push(`/coach-session/${conv.id}?modality=${modality}`);
     } catch (e) {
       console.error(e);
+      setCheckinError('Could not start a coach session. Check your connection and try again.');
     }
   };
 
@@ -167,6 +196,7 @@ export default function CheckInScreen() {
                 onPress={() => {
                   Haptics.selectionAsync();
                   setSelectedMood(m.value);
+                  setTelemetrySaved(false);
                 }}
               />
             ))}
@@ -185,7 +215,12 @@ export default function CheckInScreen() {
             multiline
             textAlignVertical="top"
             value={thought}
-            onChangeText={setThought}
+            onChangeText={(value) => {
+              setThought(value);
+              setTelemetrySaved(false);
+            }}
+            maxLength={2000}
+            accessibilityLabel="Thoughts for this check-in"
           />
         </Animated.View>
 
@@ -212,21 +247,30 @@ export default function CheckInScreen() {
                 {thought ? 'Analyze My Thoughts' : 'Save Check-In'}
               </Text>
             )}
-          </TouchableOpacity>
-        </Animated.View>
+           </TouchableOpacity>
+         </Animated.View>
+
+        <TouchableOpacity
+          onPress={() => Linking.openURL('tel:988')}
+          accessibilityRole="link"
+          accessibilityLabel="Call 988 Suicide and Crisis Lifeline"
+          style={styles.crisisLink}
+        >
+          <Text style={[styles.crisisText, { color: colors.mutedForeground }]}>In crisis? Call 988 (US/Canada).</Text>
+        </TouchableOpacity>
       </KeyboardAwareScrollViewCompat>
 
-      <Modal visible={showModal} transparent animationType="none" onRequestClose={() => setShowModal(false)}>
+      <Modal visible={showModal} transparent animationType="none" onRequestClose={closeResults}>
         <Animated.View entering={FadeIn} style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
           <Animated.View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom + 20 }, modalStyle]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.foreground }]}>Beliefs Detected</Text>
-              <TouchableOpacity onPress={() => setShowModal(false)} style={styles.closeButton}>
+              <TouchableOpacity onPress={closeResults} style={styles.closeButton}>
                 <Feather name="x" size={24} color={colors.foreground} />
               </TouchableOpacity>
             </View>
             <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
-              We noticed some potential irrational beliefs in your thought. Would you like to challenge them?
+               We noticed some possible unhelpful thought patterns. Would you like to examine them with Vera?
             </Text>
             
             <ScrollView style={styles.beliefsList}>
@@ -243,7 +287,7 @@ export default function CheckInScreen() {
                       style={[styles.challengeButton, { backgroundColor: colors.primary }]}
                       onPress={() => handleChallenge(belief.id)}
                     >
-                      <Text style={[styles.challengeText, { color: colors.primaryForeground }]}>Challenge this belief</Text>
+                       <Text style={[styles.challengeText, { color: colors.primaryForeground }]}>Work on this with Vera</Text>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
@@ -274,12 +318,14 @@ const styles = StyleSheet.create({
   label: { fontSize: 20, fontFamily: 'Inter_600SemiBold' },
   subLabel: { fontSize: 14, fontFamily: 'Inter_400Regular', marginTop: -8 },
   moodRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  moodButtonContainer: { flex: 1, minWidth: 60, aspectRatio: 0.8, borderRadius: 16 },
+  moodButtonContainer: { flexGrow: 1, flexBasis: '30%', minWidth: 88, height: 88, borderRadius: 16 },
   moodButtonInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, overflow: 'hidden' },
   moodText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   input: { minHeight: 160, borderRadius: 16, borderWidth: 1, padding: 16, fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
   analyzeButton: { padding: 18, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   analyzeText: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+  crisisLink: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  crisisText: { fontSize: 12, fontFamily: 'Inter_500Medium', textAlign: 'center', textDecorationLine: 'underline' },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

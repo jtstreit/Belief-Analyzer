@@ -20,7 +20,6 @@ services:
       # same value as cbt-sentinel-api / sentinel-lifeops-api.
       - key: CLAUDE_CODE_OAUTH_TOKEN
         sync: false
-      # Shared Render Postgres (cbt-sentinel-db) — link via "Add from database".
-      # Table namespaces verified disjoint from cbt/lifeops before first db:push.
+      # Dedicated Render Postgres (belief-analyzer-db) — link via "Add from database".
       - key: DATABASE_URL
         sync: false

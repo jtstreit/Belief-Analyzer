@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, beliefsTable, telemetryEventsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { veraComplete } from "@workspace/integrations-openai-ai-server";
+import { AnalyzePatternsBody } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -71,6 +72,12 @@ router.get("/patterns", async (req, res) => {
 
 router.post("/patterns/analyze", async (req, res) => {
   try {
+    const parsed = AnalyzePatternsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    const { modality } = parsed.data;
     // Fetch recent telemetry events with thought text (both explicit thought entries and mood check-ins with thoughts)
     const recentThoughts = await db
       .select()
@@ -91,13 +98,23 @@ router.post("/patterns/analyze", async (req, res) => {
       .map((t, i) => `${i + 1}. [${new Date(t.createdAt).toLocaleDateString()}] Mood: ${t.mood ?? "unknown"} — "${t.thoughtText ?? ""}"`)
       .join("\n");
 
-    const systemPrompt = `You are an REBT expert. Analyze the following thought journal entries and identify irrational beliefs.
-    
-For each irrational belief found, respond with a JSON array. Each item should have:
-- beliefText: the core irrational belief statement (concise, e.g. "I must be perfect or I'm a failure")
-- beliefType: one of: "catastrophizing", "awfulizing", "low_frustration_tolerance", "global_rating", "should_statements", "other"
-- triggerSituation: what situation seems to trigger this belief
-- emotionalConsequence: what emotional state this belief leads to
+    const systemPrompt = modality === "cbt"
+      ? `You are an analysis assistant using Beckian CBT concepts for a self-help app. Identify possible unhelpful thought patterns as hypotheses, not diagnoses.
+
+For each pattern found, respond with a JSON array. Each item should have:
+- beliefText: the concise automatic thought or underlying belief, phrased tentatively and without diagnosing the person
+- beliefType: one of: "all_or_nothing", "overgeneralization", "mental_filter", "discounting_positive", "mind_reading", "fortune_telling", "catastrophizing", "minimization", "emotional_reasoning", "should_statements", "labeling", "personalization", "other"
+- triggerSituation: what situation may trigger this pattern
+- emotionalConsequence: what emotional state may follow
+
+Return ONLY a valid JSON array, no markdown, no explanation.`
+      : `You are an analysis assistant using REBT concepts for a self-help app. Identify possible rigid or self-defeating beliefs as hypotheses, not diagnoses.
+
+For each pattern found, respond with a JSON array. Each item should have:
+- beliefText: the concise underlying belief (e.g. "I must be perfect or I'm a failure"), phrased tentatively and without diagnosing the person
+- beliefType: one of: "demandingness", "awfulizing", "low_frustration_tolerance", "global_rating", "other"
+- triggerSituation: what situation may trigger this belief
+- emotionalConsequence: what emotional state may follow
 
 Return ONLY a valid JSON array, no markdown, no explanation.`;
 
@@ -107,7 +124,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
       messages: [
         {
           role: "user",
-          content: `Analyze these journal entries for irrational beliefs:\n\n${thoughtsText}`,
+          content: `Analyze these journal entries for possible ${modality.toUpperCase()} thought patterns:\n\n${thoughtsText}`,
         },
       ],
     });

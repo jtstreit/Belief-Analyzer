@@ -24,25 +24,13 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'book', selected: 'book.fill' }} />
         <Label>Library</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="mindmap">
-        <Icon sf={{ default: 'rectangle.3.group', selected: 'rectangle.3.group.fill' }} />
-        <Label>Mind Map</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="feed">
-        <Icon sf={{ default: 'tray', selected: 'tray.full.fill' }} />
-        <Label>Feed</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="coach">
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
         <Label>Coach</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="progress">
-        <Icon sf={{ default: 'chart.line.uptrend.xyaxis', selected: 'chart.line.uptrend.xyaxis' }} />
-        <Label>Progress</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: 'gear', selected: 'gear' }} />
-        <Label>Settings</Label>
+        <Icon sf={{ default: 'ellipsis.circle', selected: 'ellipsis.circle.fill' }} />
+        <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -119,6 +107,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="mindmap"
         options={{
+          href: null,
           title: 'Map',
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -131,6 +120,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="feed"
         options={{
+          href: null,
           title: 'Feed',
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -155,6 +145,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="progress"
         options={{
+          href: null,
           title: 'Progress',
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -167,12 +158,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: 'More',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="gear" tintColor={color} size={24} />
+              <SymbolView name="ellipsis.circle" tintColor={color} size={24} />
             ) : (
-              <Feather name="settings" size={22} color={color} />
+              <Feather name="more-horizontal" size={22} color={color} />
             ),
         }}
       />

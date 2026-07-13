@@ -165,7 +165,7 @@ export default function PermissionsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 },
+          { paddingTop: 16, paddingBottom: insets.bottom + 40 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -178,7 +178,7 @@ export default function PermissionsScreen() {
             Ambient Capture
           </Text>
           <Text style={[styles.introBody, { color: colors.mutedForeground }]}>
-            The REBT Companion can passively capture thought-related data from
+             Belief Analyzer can passively capture thought-related data from
             your Android device — notifications, app usage, and shared text —
             to build a richer cognitive conceptualization without manual entry.
           </Text>
@@ -228,7 +228,7 @@ export default function PermissionsScreen() {
             index={2}
             icon="share-2"
             title="Share Target"
-            description="Lets you share text from any app into REBT Companion as a thought entry. No special permission needed — it is enabled via the app manifest."
+             description="Lets you share text from another app into Belief Analyzer as a thought entry when the native share integration is installed."
             statusKind="unavailable"
           />
         </View>
@@ -240,12 +240,12 @@ export default function PermissionsScreen() {
         >
           <Feather name="shield" size={16} color={colors.mutedForeground} />
           <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
-            Captured text is stored locally and sent to the local API server.
-            When you tap "Analyse", excerpts of your thought text are sent to
-            Claude (Anthropic) — an external AI service — for cognitive pattern
-            extraction. Do not capture text you would not share with an AI provider.
-            This app is a personal self-help tool, not a medical device or
-            clinical service.
+             Captured text is stored by this app's Render backend. When you run
+             Analyse, use Check-In analysis, or chat with Vera, relevant text is
+             sent to Claude (Anthropic) to extract patterns or generate coaching
+             replies. Do not capture passwords, financial details, medical records,
+             or anything you would not send to an AI provider. This is a personal
+             self-help tool, not a medical device or clinical service.
           </Text>
         </Animated.View>
 

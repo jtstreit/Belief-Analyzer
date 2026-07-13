@@ -24,7 +24,12 @@ setBaseUrl(API_ORIGIN);
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 2, staleTime: 30_000 },
+    mutations: { retry: 0 },
+  },
+});
 
 function RootLayoutNav() {
   const colors = useColors();
@@ -65,6 +70,10 @@ function RootLayoutNav() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="exercise-history/[sessionId]"
+        options={{ headerShown: false }}
+      />
     </Stack>
   );
 }
@@ -90,7 +99,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ModalityProvider>
-            <GestureHandlerRootView>
+            <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <RootLayoutNav />
               </KeyboardProvider>

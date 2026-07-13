@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import { Alert, StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useGetOpenaiConversation } from '@workspace/api-client-react';
+import { getGetOpenaiConversationQueryKey, useGetOpenaiConversation } from '@workspace/api-client-react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -74,7 +74,12 @@ function ExerciseRecommendationCard({
             <Text style={[styles.recMeta, { color: colors.mutedForeground }]}>~{minutes} min</Text>
           )}
         </View>
-        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+        <TouchableOpacity
+          onPress={onDismiss}
+          hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss exercise recommendation"
+        >
           <Feather name="x" size={16} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
@@ -106,7 +111,7 @@ export default function CoachSessionScreen() {
   const { modality: globalModality } = useModality();
   const modality = modalityParam ?? globalModality;
 
-  const activeColor = modality === 'cbt' ? '#6366F1' : '#F59E0B';
+  const activeColor = modality === 'cbt' ? colors.cbt : colors.accent;
 
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
@@ -114,11 +119,15 @@ export default function CoachSessionScreen() {
   const [streamedContent, setStreamedContent] = useState('');
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [recommendedExercise, setRecommendedExercise] = useState<RecommendedExercise | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   // exerciseContext from exercise completion — attach to next outgoing message
   const pendingExerciseContextRef = useRef<string | null>(null);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
-  const { data: conversation, isLoading } = useGetOpenaiConversation(convId);
+  const { data: conversation, isLoading, isError, refetch } = useGetOpenaiConversation(convId, {
+    query: { queryKey: getGetOpenaiConversationQueryKey(convId), enabled: Number.isFinite(convId) },
+  });
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -136,11 +145,14 @@ export default function CoachSessionScreen() {
     }
   }, [exerciseContextParam]);
 
+  useEffect(() => () => requestAbortRef.current?.abort(), []);
+
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (isStreaming || !inputText.trim() || !Number.isFinite(convId)) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRecommendedExercise(null);
+    setSendError(null);
 
     const textToSend = inputText.trim();
     const exerciseContext = pendingExerciseContextRef.current;
@@ -157,9 +169,12 @@ export default function CoachSessionScreen() {
     setInputText('');
     setIsStreaming(true);
     let currentStream = '';
+    let responseAccepted = false;
     setStreamedContent('');
 
     try {
+      const controller = new AbortController();
+      requestAbortRef.current = controller;
       const response = await expoFetch(
         `${API_ORIGIN}/api/openai/conversations/${convId}/messages`,
         {
@@ -170,11 +185,16 @@ export default function CoachSessionScreen() {
             modality,
             ...(exerciseContext ? { exerciseContext } : {}),
           }),
+          signal: controller.signal,
           // @ts-ignore
           reactNative: { textStreaming: true },
         },
       );
 
+      if (!response.ok) {
+        throw new Error(`Coach request failed with status ${response.status}`);
+      }
+      responseAccepted = true;
       if (!response.body) throw new Error('No response body');
 
       const reader = response.body.getReader();
@@ -191,21 +211,25 @@ export default function CoachSessionScreen() {
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            let json: any;
             try {
-              const json = JSON.parse(line.slice(6));
-              if (json.content) {
-                currentStream += json.content;
-                setStreamedContent(currentStream);
-              }
-              if (json.recommendedExercise) {
-                setRecommendedExercise(json.recommendedExercise);
-              }
-            } catch { /* ignore parse errors */ }
+              json = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
+            if (json.error) throw new Error(json.error);
+            if (json.content) {
+              currentStream += json.content;
+              setStreamedContent(currentStream);
+            }
+            if (json.recommendedExercise) {
+              setRecommendedExercise(json.recommendedExercise);
+            }
           }
         }
       }
 
-      setIsStreaming(false);
+      if (!currentStream.trim()) throw new Error('Coach returned an empty response');
       setMessages(prev => [
         ...prev,
         {
@@ -218,6 +242,22 @@ export default function CoachSessionScreen() {
       setStreamedContent('');
     } catch (e) {
       console.error(e);
+      if (!(e instanceof Error && e.name === 'AbortError')) {
+        if (responseAccepted) {
+          setSendError('Your message was saved, but Vera could not complete the reply. The conversation has been refreshed; do not resend it.');
+          Alert.alert('Reply interrupted', 'Your message was saved. The conversation will refresh to avoid sending it twice.');
+          void refetch();
+        } else {
+          setMessages((prev) => prev.filter((message) => message.id !== userMessage.id));
+          setInputText(textToSend);
+          pendingExerciseContextRef.current = exerciseContext;
+          setSendError('Your message was not sent. The draft has been restored so you can try again.');
+          Alert.alert('Message not sent', 'Check your connection and try again.');
+        }
+      }
+      setStreamedContent('');
+    } finally {
+      requestAbortRef.current = null;
       setIsStreaming(false);
     }
   };
@@ -283,6 +323,26 @@ export default function CoachSessionScreen() {
     shadowOffset: { width: 0, height: -2 },
     elevation: 8,
   }));
+
+  if (!Number.isFinite(convId) || isError) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background, padding: 24 }]}>
+        <Feather name="alert-circle" size={28} color={colors.destructive} />
+        <Text style={[styles.errorTitle, { color: colors.foreground }]}>Conversation unavailable</Text>
+        <Text style={[styles.errorText, { color: colors.mutedForeground }]}>Check your connection, then try again.</Text>
+        {Number.isFinite(convId) ? (
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: activeColor }]}
+            onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading conversation"
+          >
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -351,6 +411,13 @@ export default function CoachSessionScreen() {
         </View>
       ) : null}
 
+      {sendError ? (
+        <View style={[styles.sendError, { backgroundColor: colors.destructive + '18', borderColor: colors.destructive + '55' }]}>
+          <Feather name="alert-triangle" size={15} color={colors.destructive} />
+          <Text style={[styles.sendErrorText, { color: colors.foreground }]}>{sendError}</Text>
+        </View>
+      ) : null}
+
       <View style={[
         styles.inputContainer,
         { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom || 16 },
@@ -366,6 +433,7 @@ export default function CoachSessionScreen() {
           placeholderTextColor={colors.mutedForeground}
           multiline
           maxLength={1000}
+          accessibilityLabel="Message Vera"
         />
 
         <View style={styles.sendButtonWrapper}>
@@ -374,6 +442,8 @@ export default function CoachSessionScreen() {
               <TouchableOpacity
                 style={[styles.sendButton, { backgroundColor: activeColor }]}
                 onPress={handleSend}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
               >
                 <Feather name="send" size={18} color="#000" />
               </TouchableOpacity>
@@ -388,6 +458,10 @@ export default function CoachSessionScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  errorTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold', marginTop: 12 },
+  errorText: { fontSize: 14, fontFamily: 'Inter_400Regular', marginTop: 6, textAlign: 'center' },
+  retryButton: { marginTop: 18, minHeight: 48, paddingHorizontal: 24, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  retryButtonText: { color: '#000', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   listContent: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   messageContainer: { width: '100%', flexDirection: 'row', marginBottom: 16 },
   messageUser: { justifyContent: 'flex-end' },
@@ -398,6 +472,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, gap: 12,
   },
+  sendError: { marginHorizontal: 16, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 8 },
+  sendErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: 'Inter_400Regular' },
   input: {
     flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22,
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,

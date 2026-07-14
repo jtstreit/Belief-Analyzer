@@ -1,8 +1,7 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
@@ -38,10 +37,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
   const { modality } = useModality();
   const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
 
@@ -49,23 +45,33 @@ function ClassicTabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: activeColor,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarInactiveTintColor: '#BFCABD',
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           position: 'absolute',
-          backgroundColor: isIOS ? 'transparent' : colors.background,
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: colors.border,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          left: 16,
+          right: 16,
+          width: 'auto',
+          bottom: 14,
+          height: 74,
+          paddingTop: 8,
+          paddingBottom: 8,
+          borderRadius: 24,
+          backgroundColor: '#1C2E1F',
+          borderTopWidth: 0,
+          elevation: 12,
+          shadowColor: '#132116',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.28,
+          shadowRadius: 16,
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
-          ) : null,
-        tabBarLabelStyle: { fontSize: 10 },
+        tabBarItemStyle: { borderRadius: 18 },
+        tabBarLabelStyle: {
+          fontSize: 9,
+          fontFamily: 'Inter_600SemiBold',
+          marginTop: 2,
+        },
       }}
     >
       <Tabs.Screen

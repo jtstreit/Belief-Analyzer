@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 
@@ -22,8 +23,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 
 // Expo's native embed command uses the pnpm workspace as its server root.
 // Include that root so the Android workspace entry can be resolved by Metro.
+// Also include pnpm's real virtual store: junctioned packages can otherwise
+// resolve in Node while Metro rejects them for living outside its watch roots.
+const expoRouterRoot = path.dirname(
+  fs.realpathSync(require.resolve('expo-router/package.json')),
+);
+const pnpmVirtualStore = path.resolve(expoRouterRoot, '../../..');
 config.watchFolders = [
-  ...new Set([...config.watchFolders, path.resolve(__dirname, '../..')]),
+  ...new Set([
+    ...config.watchFolders,
+    path.resolve(__dirname, '../..'),
+    pnpmVirtualStore,
+  ]),
 ];
 
 module.exports = config;

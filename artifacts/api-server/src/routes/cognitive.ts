@@ -215,9 +215,11 @@ router.post("/cognitive/analyze", async (req, res) => {
 
     // ── Pass 1: extract automatic thoughts from content events ────────
     // Events in `withContent` are marked processed ONLY inside a transaction
-    // after their thoughts are successfully persisted. If the LLM fails or
-    // insertion throws, the transaction rolls back and events remain
-    // unprocessed so the next analyze call can retry them.
+    // after the LLM returns a valid array and any extracted thoughts are
+    // persisted. A valid empty array means the event was analyzed and no
+    // defensible cognitive signal was found; it must not remain pending and be
+    // resent forever. Network, parse, or insertion failures still roll back
+    // the batch so the next analyze call can retry it.
     if (withContent.length > 0) {
       const entriesText = withContent
         .map(
@@ -283,16 +285,12 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
         );
       });
 
-      // Atomic: insert validated thoughts and mark only their source events as
-      // processed. Events with no valid thoughts extracted remain unprocessed
-      // and retryable. Transaction rollback leaves everything retryable.
-      // Context-only app-usage rows are consumed after a successful model call
-      // even when the model correctly returns no thought for them. Direct text
-      // rows with no valid extraction stay retryable.
+      // Atomic: insert validated thoughts and mark the successfully analyzed
+      // batch processed. A valid response can correctly contain no thoughts;
+      // those events are analyzed, not pending. Transaction rollback leaves
+      // everything retryable if persistence fails.
       const processedEventIds = new Set<number>(
-        withContent
-          .filter((event) => event.type === "app_usage")
-          .map((event) => event.id),
+        withContent.map((event) => event.id),
       );
       await db.transaction(async (tx) => {
         for (const t of validThoughts) {
@@ -319,8 +317,6 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
             .set({ processedAt: new Date() })
             .where(inArray(telemetryEventsTable.id, [...processedEventIds]));
         }
-        // Events with zero valid thoughts are intentionally left unprocessed
-        // (processedAt stays null) so they can be retried on next analyze call.
       });
     }
 

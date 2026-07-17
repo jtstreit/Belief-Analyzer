@@ -407,6 +407,14 @@ describe("POST /api/cognitive/analyze", () => {
       (i) => i.table === sentinels.automaticThoughtsTable,
     );
     expect(thoughtInserts).toHaveLength(0);
+    expect(
+      state.updated.some(
+        (update) =>
+          update.table === sentinels.telemetryEventsTable &&
+          (update.set as Record<string, unknown>)?.["processedAt"] instanceof
+            Date,
+      ),
+    ).toBe(true);
   });
 
   // ── Pass 1: malformed individual items are skipped, valid ones inserted ───

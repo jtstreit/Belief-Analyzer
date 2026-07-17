@@ -23,3 +23,6 @@ services:
       # Dedicated Render Postgres (belief-analyzer-db) — link via "Add from database".
       - key: DATABASE_URL
         sync: false
+      # Shared ingest credential used only by the server-to-server LifeOps pull.
+      - key: SENTINEL_INGEST_TOKEN
+        sync: false

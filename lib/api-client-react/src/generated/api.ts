@@ -46,6 +46,8 @@ import type {
   OpenaiMessageInput,
   PatternSummary,
   ProgressSummary,
+  SentinelStatus,
+  SentinelSyncResult,
   TelemetryBatchInput,
   TelemetryEvent,
   TelemetryEventInput
@@ -380,6 +382,154 @@ export const useCreateTelemetryBatch = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateTelemetryBatchMutationOptions(options));
+    }
+
+export const getGetSentinelStatusUrl = () => {
+
+
+
+
+  return `/api/sentinel/status`
+}
+
+/**
+ * @summary Get LifeOps ingestion and Opus analysis status
+ */
+export const getSentinelStatus = async ( options?: RequestInit): Promise<SentinelStatus> => {
+
+  return customFetch<SentinelStatus>(getGetSentinelStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSentinelStatusQueryKey = () => {
+    return [
+    `/api/sentinel/status`
+    ] as const;
+    }
+
+
+export const getGetSentinelStatusQueryOptions = <TData = Awaited<ReturnType<typeof getSentinelStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSentinelStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSentinelStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSentinelStatus>>> = ({ signal }) => getSentinelStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSentinelStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSentinelStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getSentinelStatus>>>
+export type GetSentinelStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get LifeOps ingestion and Opus analysis status
+ */
+
+export function useGetSentinelStatus<TData = Awaited<ReturnType<typeof getSentinelStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSentinelStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSentinelStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSyncSentinelUrl = () => {
+
+
+
+
+  return `/api/sentinel/sync`
+}
+
+/**
+ * @summary Pull new LifeOps screen signals through the PHI filter
+ */
+export const syncSentinel = async ( options?: RequestInit): Promise<SentinelSyncResult> => {
+
+  return customFetch<SentinelSyncResult>(getSyncSentinelUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncSentinelMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncSentinel>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncSentinel>>, TError,void, TContext> => {
+
+const mutationKey = ['syncSentinel'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncSentinel>>, void> = () => {
+
+
+          return  syncSentinel(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncSentinelMutationResult = NonNullable<Awaited<ReturnType<typeof syncSentinel>>>
+
+    export type SyncSentinelMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Pull new LifeOps screen signals through the PHI filter
+ */
+export const useSyncSentinel = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncSentinel>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncSentinel>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncSentinelMutationOptions(options));
     }
 
 export const getListBeliefsUrl = (params?: ListBeliefsParams,) => {

@@ -1,34 +1,43 @@
-import React from 'react';
-import { Platform } from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { Feather } from '@expo/vector-icons';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
-import { useModality } from '@/contexts/ModalityContext';
+import React from "react";
+import { Platform } from "react-native";
+import { useColors } from "@/hooks/useColors";
+import { Feather } from "@expo/vector-icons";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
+import { Tabs } from "expo-router";
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { SymbolView } from "expo-symbols";
+import { useModality } from "@/contexts/ModalityContext";
 
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="checkin">
-        <Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' }} />
-        <Label>Check-In</Label>
+      <NativeTabs.Trigger name="feed">
+        <Icon
+          sf={{ default: "waveform.path.ecg", selected: "waveform.path.ecg" }}
+        />
+        <Label>Signals</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="library">
-        <Icon sf={{ default: 'book', selected: 'book.fill' }} />
-        <Label>Library</Label>
+      <NativeTabs.Trigger name="mindmap">
+        <Icon sf={{ default: "brain", selected: "brain.fill" }} />
+        <Label>Insights</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="coach">
-        <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
+        <Icon
+          sf={{
+            default: "bubble.left.and.bubble.right",
+            selected: "bubble.left.and.bubble.right.fill",
+          }}
+        />
         <Label>Coach</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: 'ellipsis.circle', selected: 'ellipsis.circle.fill' }} />
+        <Icon
+          sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }}
+        />
         <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
@@ -37,31 +46,31 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
-  const isIOS = Platform.OS === 'ios';
+  const isIOS = Platform.OS === "ios";
   const { modality } = useModality();
-  const activeColor = modality === 'rebt' ? colors.accent : (colors as any).cbt;
+  const activeColor = modality === "rebt" ? colors.accent : (colors as any).cbt;
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: activeColor,
-        tabBarInactiveTintColor: '#BFCABD',
+        tabBarInactiveTintColor: "#BFCABD",
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          position: 'absolute',
+          position: "absolute",
           left: 16,
           right: 16,
-          width: 'auto',
+          width: "auto",
           bottom: 14,
           height: 74,
           paddingTop: 8,
           paddingBottom: 8,
           borderRadius: 24,
-          backgroundColor: '#1C2E1F',
+          backgroundColor: "#1C2E1F",
           borderTopWidth: 0,
           elevation: 12,
-          shadowColor: '#132116',
+          shadowColor: "#132116",
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.28,
           shadowRadius: 16,
@@ -69,7 +78,7 @@ function ClassicTabLayout() {
         tabBarItemStyle: { borderRadius: 18 },
         tabBarLabelStyle: {
           fontSize: 9,
-          fontFamily: 'Inter_600SemiBold',
+          fontFamily: "Inter_600SemiBold",
           marginTop: 2,
         },
       }}
@@ -77,7 +86,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: "Home",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="house" tintColor={color} size={22} />
@@ -89,7 +98,8 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="checkin"
         options={{
-          title: 'Check-In',
+          href: null,
+          title: "Check-In",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="plus.circle" tintColor={color} size={22} />
@@ -101,7 +111,8 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="library"
         options={{
-          title: 'Library',
+          href: null,
+          title: "Library",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="book" tintColor={color} size={24} />
@@ -113,11 +124,14 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="mindmap"
         options={{
-          href: null,
-          title: 'Map',
+          title: "Insights",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="rectangle.3.group" tintColor={color} size={22} />
+              <SymbolView
+                name="rectangle.3.group"
+                tintColor={color}
+                size={22}
+              />
             ) : (
               <Feather name="layers" size={20} color={color} />
             ),
@@ -126,8 +140,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="feed"
         options={{
-          href: null,
-          title: 'Feed',
+          title: "Signals",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="tray" tintColor={color} size={22} />
@@ -139,10 +152,14 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="coach"
         options={{
-          title: 'Coach',
+          title: "Coach",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="bubble.left.and.bubble.right" tintColor={color} size={22} />
+              <SymbolView
+                name="bubble.left.and.bubble.right"
+                tintColor={color}
+                size={22}
+              />
             ) : (
               <Feather name="message-circle" size={20} color={color} />
             ),
@@ -152,10 +169,14 @@ function ClassicTabLayout() {
         name="progress"
         options={{
           href: null,
-          title: 'Progress',
+          title: "Progress",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="chart.line.uptrend.xyaxis" tintColor={color} size={22} />
+              <SymbolView
+                name="chart.line.uptrend.xyaxis"
+                tintColor={color}
+                size={22}
+              />
             ) : (
               <Feather name="trending-up" size={20} color={color} />
             ),
@@ -164,7 +185,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'More',
+          title: "More",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="ellipsis.circle" tintColor={color} size={24} />

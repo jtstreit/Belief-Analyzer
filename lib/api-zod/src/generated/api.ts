@@ -85,6 +85,37 @@ export const CreateTelemetryBatchResponse = zod.array(CreateTelemetryBatchRespon
 
 
 /**
+ * @summary Get LifeOps ingestion and Opus analysis status
+ */
+export const GetSentinelStatusResponse = zod.object({
+  "configured": zod.boolean(),
+  "source": zod.string(),
+  "model": zod.string(),
+  "clinicalFilterEnabled": zod.boolean(),
+  "lastSyncAt": zod.coerce.date().nullish(),
+  "lastSyncCount": zod.number(),
+  "lastSyncError": zod.string().nullish()
+})
+
+
+/**
+ * @summary Pull new LifeOps screen signals through the PHI filter
+ */
+export const SyncSentinelResponse = zod.object({
+  "received": zod.number(),
+  "eligible": zod.number(),
+  "ingested": zod.number(),
+  "skippedDuplicates": zod.number(),
+  "filteredClinical": zod.number(),
+  "filteredLocation": zod.number(),
+  "filteredUnsupported": zod.number(),
+  "filteredNoContent": zod.number(),
+  "filteredInvalid": zod.number(),
+  "syncedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List identified irrational beliefs
  */
 export const ListBeliefsQueryParams = zod.object({

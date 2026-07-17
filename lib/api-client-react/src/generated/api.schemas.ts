@@ -46,6 +46,31 @@ export interface TelemetryBatchInput {
   events: TelemetryEventInput[];
 }
 
+export interface SentinelStatus {
+  configured: boolean;
+  source: string;
+  model: string;
+  clinicalFilterEnabled: boolean;
+  /** @nullable */
+  lastSyncAt?: string | null;
+  lastSyncCount: number;
+  /** @nullable */
+  lastSyncError?: string | null;
+}
+
+export interface SentinelSyncResult {
+  received: number;
+  eligible: number;
+  ingested: number;
+  skippedDuplicates: number;
+  filteredClinical: number;
+  filteredLocation: number;
+  filteredUnsupported: number;
+  filteredNoContent: number;
+  filteredInvalid: number;
+  syncedAt: string;
+}
+
 export interface AutomaticThought {
   id: number;
   /** @nullable */

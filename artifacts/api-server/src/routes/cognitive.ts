@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { isNull, inArray, desc, eq, sql, and, lt, lte } from "drizzle-orm";
 import { veraComplete } from "@workspace/integrations-openai-ai-server";
+import { isClinicalContent } from "../lib/lifeops-policy";
 
 const router = Router();
 
@@ -61,7 +62,9 @@ router.get("/cognitive/map", async (req, res) => {
 
 router.get("/cognitive/automatic-thoughts", async (req, res) => {
   try {
-    const limit = req.query["limit"] ? parseInt(req.query["limit"] as string) : 50;
+    const limit = req.query["limit"]
+      ? parseInt(req.query["limit"] as string)
+      : 50;
     const thoughts = await db
       .select()
       .from(automaticThoughtsTable)
@@ -175,20 +178,39 @@ router.post("/cognitive/analyze", async (req, res) => {
       .orderBy(desc(telemetryEventsTable.createdAt))
       .limit(100);
 
+    const privacyFiltered = unprocessed.filter((event) =>
+      isClinicalContent(
+        [event.source ?? "", event.thoughtText ?? ""].join("\n"),
+      ),
+    );
+    const privacyFilteredIds = new Set(
+      privacyFiltered.map((event) => event.id),
+    );
     const withContent = unprocessed.filter(
-      (e) => e.thoughtText && e.thoughtText.trim().length > 5,
+      (e) =>
+        !privacyFilteredIds.has(e.id) &&
+        e.thoughtText &&
+        e.thoughtText.trim().length > 5,
     );
     const withoutContent = unprocessed.filter(
-      (e) => !e.thoughtText || e.thoughtText.trim().length <= 5,
+      (e) =>
+        privacyFilteredIds.has(e.id) ||
+        !e.thoughtText ||
+        e.thoughtText.trim().length <= 5,
     );
 
-    // Events without meaningful text will never yield thoughts — consume them
-    // eagerly so they don't inflate the backlog badge on retry.
+    // Events without meaningful text, plus anything caught by the defense-in-
+    // depth clinical filter, are consumed without being sent to the LLM.
     if (withoutContent.length > 0) {
       await db
         .update(telemetryEventsTable)
         .set({ processedAt: new Date() })
-        .where(inArray(telemetryEventsTable.id, withoutContent.map((e) => e.id)));
+        .where(
+          inArray(
+            telemetryEventsTable.id,
+            withoutContent.map((e) => e.id),
+          ),
+        );
     }
 
     // ── Pass 1: extract automatic thoughts from content events ────────
@@ -204,7 +226,8 @@ router.post("/cognitive/analyze", async (req, res) => {
         )
         .join("\n");
 
-      const layer1System = `You are a Beck-model CBT expert. Extract automatic thoughts from the entries below.
+      const layer1System = `You are a Beck-model CBT expert reviewing a personal phone telemetry stream. It can contain screen text, SMS, notifications, calendar text, user notes, and app-usage context. Extract suspected automatic thoughts and cognitive distortions from the entries below.
+For direct text, identify thoughts that are expressed or strongly implied. App-usage context must not be treated as proof of a thought: infer a candidate from usage only when at least three entries show a consistent behavioral pattern, and make the situation say it was inferred from repeated phone behavior. Never invent a belief from a single app-usage event. Omit entries with no defensible cognitive signal.
 For each entry return one or more automatic thought objects as a JSON array. Each object:
   entryIndex: number (1-based, matches the entry number)
   thoughtText: string — the core automatic thought (concise, first-person)
@@ -246,24 +269,31 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
         intensityPct?: number | null;
         distortionTags?: string[];
       };
-      const validThoughts: ValidThought[] = (parsedResponse as unknown[]).filter(
-        (t): t is ValidThought => {
-          if (typeof t !== "object" || t === null) return false;
-          const obj = t as Record<string, unknown>;
-          return (
-            typeof obj["entryIndex"] === "number" &&
-            (obj["entryIndex"] as number) >= 1 &&
-            (obj["entryIndex"] as number) <= withContent.length &&
-            typeof obj["thoughtText"] === "string" &&
-            (obj["thoughtText"] as string).trim().length > 0
-          );
-        },
-      );
+      const validThoughts: ValidThought[] = (
+        parsedResponse as unknown[]
+      ).filter((t): t is ValidThought => {
+        if (typeof t !== "object" || t === null) return false;
+        const obj = t as Record<string, unknown>;
+        return (
+          typeof obj["entryIndex"] === "number" &&
+          (obj["entryIndex"] as number) >= 1 &&
+          (obj["entryIndex"] as number) <= withContent.length &&
+          typeof obj["thoughtText"] === "string" &&
+          (obj["thoughtText"] as string).trim().length > 0
+        );
+      });
 
       // Atomic: insert validated thoughts and mark only their source events as
       // processed. Events with no valid thoughts extracted remain unprocessed
       // and retryable. Transaction rollback leaves everything retryable.
-      const processedEventIds = new Set<number>();
+      // Context-only app-usage rows are consumed after a successful model call
+      // even when the model correctly returns no thought for them. Direct text
+      // rows with no valid extraction stay retryable.
+      const processedEventIds = new Set<number>(
+        withContent
+          .filter((event) => event.type === "app_usage")
+          .map((event) => event.id),
+      );
       await db.transaction(async (tx) => {
         for (const t of validThoughts) {
           const sourceEvent = withContent[t.entryIndex - 1];
@@ -314,7 +344,9 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
 
       // Only active beliefs are offered to the LLM for confirmation —
       // dismissed ones must not be reinforced or resurrected.
-      const activeIBeliefs = existingIBeliefs.filter((b) => b.status === "active");
+      const activeIBeliefs = existingIBeliefs.filter(
+        (b) => b.status === "active",
+      );
       const existingIText =
         activeIBeliefs.length > 0
           ? `\nExisting intermediate beliefs (reference by id when this batch confirms them):\n${activeIBeliefs.map((b) => `  id:${b.id} "${b.beliefText}" (${b.category})`).join("\n")}`
@@ -354,7 +386,9 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
       for (const b of rawBeliefs) {
         if (!b.beliefText?.trim()) continue;
         if (b.matchesExistingId) {
-          const existing = existingIBeliefs.find((e) => e.id === b.matchesExistingId);
+          const existing = existingIBeliefs.find(
+            (e) => e.id === b.matchesExistingId,
+          );
           // Dismissed beliefs stay dismissed — never reinforce them.
           if (existing && existing.status === "active") {
             await db
@@ -405,11 +439,16 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
 
     if (allIBeliefs.length >= 2) {
       const beliefsSummary = allIBeliefs
-        .map((b) => `- "${b.beliefText}" (${b.category}, confidence:${b.confidence})`)
+        .map(
+          (b) =>
+            `- "${b.beliefText}" (${b.category}, confidence:${b.confidence})`,
+        )
         .join("\n");
 
       // Dismissed schemas are withheld from the LLM so they are never confirmed.
-      const activeSchemas = existingSchemas.filter((s) => s.status === "active");
+      const activeSchemas = existingSchemas.filter(
+        (s) => s.status === "active",
+      );
       const existingSchemasText =
         activeSchemas.length > 0
           ? `\nExisting core schemas (reference by id when confirmed):\n${activeSchemas.map((s) => `  id:${s.id} "${s.schemaText}" (${s.domain})`).join("\n")}`
@@ -447,7 +486,9 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
       for (const s of rawSchemas) {
         if (!s.schemaText?.trim() || !s.domain) continue;
         if (s.matchesExistingId) {
-          const existing = existingSchemas.find((e) => e.id === s.matchesExistingId);
+          const existing = existingSchemas.find(
+            (e) => e.id === s.matchesExistingId,
+          );
           // Dismissed schemas stay dismissed — never reinforce them.
           if (existing && existing.status === "active") {
             await db

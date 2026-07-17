@@ -1,22 +1,22 @@
-import React, { useEffect } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import React, { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
   useFonts,
-} from '@expo-google-fonts/inter';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { setBaseUrl } from '@workspace/api-client-react';
-import { useColors } from '@/hooks/useColors';
-import { ModalityProvider } from '@/contexts/ModalityContext';
-import { API_ORIGIN } from '@/constants/api';
+} from "@expo-google-fonts/inter";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { setBaseUrl } from "@workspace/api-client-react";
+import { useColors } from "@/hooks/useColors";
+import { ModalityProvider } from "@/contexts/ModalityContext";
+import { API_ORIGIN } from "@/constants/api";
 
 // Set base URL for API client
 setBaseUrl(API_ORIGIN);
@@ -34,13 +34,13 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   const colors = useColors();
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+    <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="belief/[id]"
         options={{
           headerShown: true,
-          title: 'Belief Detail',
+          title: "Belief Detail",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
         }}
@@ -49,7 +49,7 @@ function RootLayoutNav() {
         name="coach-session/[id]"
         options={{
           headerShown: true,
-          title: 'Vera — Coach',
+          title: "Vera — Coach",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
         }}
@@ -58,8 +58,8 @@ function RootLayoutNav() {
         name="permissions"
         options={{
           headerShown: true,
-          title: 'Capture Setup',
-          presentation: 'modal',
+          title: "Data Pipeline",
+          presentation: "modal",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
         }}

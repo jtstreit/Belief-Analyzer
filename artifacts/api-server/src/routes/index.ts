@@ -7,6 +7,7 @@ import cognitiveRouter from "./cognitive";
 import openaiRouter from "./openai/index";
 import exercisesRouter from "./exercises";
 import progressRouter from "./progress";
+import sentinelRouter from "./sentinel";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(cognitiveRouter);
 router.use(openaiRouter);
 router.use(exercisesRouter);
 router.use(progressRouter);
+router.use(sentinelRouter);
 
 export default router;

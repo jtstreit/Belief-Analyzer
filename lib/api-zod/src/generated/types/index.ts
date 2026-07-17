@@ -42,6 +42,8 @@ export * from './openaiMessage';
 export * from './openaiMessageInput';
 export * from './patternSummary';
 export * from './progressSummary';
+export * from './sentinelStatus';
+export * from './sentinelSyncResult';
 export * from './telemetryBatchInput';
 export * from './telemetryEvent';
 export * from './telemetryEventInput';

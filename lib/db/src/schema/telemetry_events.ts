@@ -1,4 +1,12 @@
-import { pgTable, serial, text, jsonb, timestamp, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  jsonb,
+  timestamp,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -28,16 +36,22 @@ export const telemetryEventsTable = pgTable(
     thoughtText: text("thought_text"),
     source: text("source"),
     metadata: jsonb("metadata"),
+    externalId: text("external_id"),
     processedAt: timestamp("processed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
     index("telemetry_processed_idx").on(table.processedAt),
     index("telemetry_created_idx").on(table.createdAt),
+    uniqueIndex("telemetry_external_id_idx").on(table.externalId),
   ],
 );
 
-export const insertTelemetryEventSchema = createInsertSchema(telemetryEventsTable).omit({
+export const insertTelemetryEventSchema = createInsertSchema(
+  telemetryEventsTable,
+).omit({
   id: true,
   createdAt: true,
   processedAt: true,

@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: telemetry
     description: Phone telemetry and check-in events
+  - name: sentinel
+    description: PHI-filtered LifeOps telemetry ingestion
   - name: beliefs
     description: Identified irrational beliefs
   - name: patterns
@@ -99,6 +101,32 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TelemetryEvent"
+
+  /sentinel/status:
+    get:
+      operationId: getSentinelStatus
+      tags: [sentinel]
+      summary: Get LifeOps ingestion and Opus analysis status
+      responses:
+        "200":
+          description: LifeOps adapter status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentinelStatus"
+
+  /sentinel/sync:
+    post:
+      operationId: syncSentinel
+      tags: [sentinel]
+      summary: Pull new LifeOps screen signals through the PHI filter
+      responses:
+        "200":
+          description: Aggregate sync result; raw filtered content is never returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentinelSyncResult"
 
   /beliefs:
     get:
@@ -670,6 +698,67 @@ components:
             $ref: "#/components/schemas/TelemetryEventInput"
       required:
         - events
+
+    SentinelStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        source:
+          type: string
+        model:
+          type: string
+        clinicalFilterEnabled:
+          type: boolean
+        lastSyncAt:
+          type: ["string", "null"]
+          format: date-time
+        lastSyncCount:
+          type: integer
+        lastSyncError:
+          type: ["string", "null"]
+      required:
+        - configured
+        - source
+        - model
+        - clinicalFilterEnabled
+        - lastSyncCount
+
+    SentinelSyncResult:
+      type: object
+      properties:
+        received:
+          type: integer
+        eligible:
+          type: integer
+        ingested:
+          type: integer
+        skippedDuplicates:
+          type: integer
+        filteredClinical:
+          type: integer
+        filteredLocation:
+          type: integer
+        filteredUnsupported:
+          type: integer
+        filteredNoContent:
+          type: integer
+        filteredInvalid:
+          type: integer
+        syncedAt:
+          type: string
+          format: date-time
+      required:
+        - received
+        - eligible
+        - ingested
+        - skippedDuplicates
+        - filteredClinical
+        - filteredLocation
+        - filteredUnsupported
+        - filteredNoContent
+        - filteredInvalid
+        - syncedAt
 
     AutomaticThought:
       type: object

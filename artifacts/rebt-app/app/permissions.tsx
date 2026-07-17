@@ -1,263 +1,230 @@
-/**
- * Capture Setup screen — Android ambient capture onboarding.
- *
- * Platform-guarded: shows capability explanations + permission request buttons
- * on Android + custom dev build. On web / Expo Go / iOS it shows "Requires
- * Android dev build" status for each capture method without crashing.
- */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from "react";
 import {
-  Platform,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-
-// Lazy import — always use the bridge module's public API, never call
-// the native module directly.
+} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  isNativeCaptureAvailable,
-  requestNotificationListenerPermission,
-  requestUsageStatsPermission,
-  getNativeCaptureStatus,
-  type NativeCaptureStatus,
-} from '@/modules/native-capture';
+  getGetCognitiveMapQueryKey,
+  getGetSentinelStatusQueryKey,
+  getListTelemetryQueryKey,
+  useAnalyzeCognitive,
+  useGetSentinelStatus,
+  useSyncSentinel,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useColors } from "@/hooks/useColors";
 
-// ─── Permission row component ────────────────────────────────────────────────
-
-type StatusKind = 'granted' | 'pending' | 'unavailable';
-
-function PermissionRow({
+function PipelineRow({
   icon,
   title,
-  description,
-  statusKind,
-  onRequest,
-  index,
+  detail,
+  status,
+  healthy,
 }: {
   icon: string;
   title: string;
-  description: string;
-  statusKind: StatusKind;
-  onRequest?: () => Promise<void>;
-  index: number;
+  detail: string;
+  status: string;
+  healthy: boolean;
 }) {
   const colors = useColors();
-  const [loading, setLoading] = useState(false);
-
-  const handlePress = useCallback(async () => {
-    if (!onRequest) return;
-    setLoading(true);
-    try {
-      await onRequest();
-    } finally {
-      setLoading(false);
-    }
-  }, [onRequest]);
-
-  const statusColor =
-    statusKind === 'granted'
-      ? '#10B981'
-      : statusKind === 'pending'
-        ? colors.primary
-        : colors.mutedForeground;
-
-  const statusLabel =
-    statusKind === 'granted'
-      ? 'Granted'
-      : statusKind === 'pending'
-        ? 'Not granted'
-        : 'Requires dev build';
-
-  const statusIcon =
-    statusKind === 'granted'
-      ? 'check-circle'
-      : statusKind === 'pending'
-        ? 'alert-circle'
-        : 'info';
-
   return (
-    <Animated.View
-      entering={FadeInDown.delay(index * 80).duration(500).springify()}
-      style={[styles.row, { borderColor: colors.border }]}
+    <View
+      style={[
+        styles.row,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
     >
-      <LinearGradient
-        colors={['#1E2540', '#141928']}
-        style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
-      />
-      <View style={styles.rowHeader}>
-        <View style={[styles.rowIcon, { backgroundColor: `${colors.accent}22` }]}>
-          <Feather name={icon as any} size={18} color={colors.accent} />
-        </View>
-        <Text style={[styles.rowTitle, { color: colors.cardForeground }]}>{title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: `${statusColor}22` }]}>
-          <Feather name={statusIcon as any} size={11} color={statusColor} />
-          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
-        </View>
+      <View
+        style={[styles.rowIcon, { backgroundColor: `${colors.primary}18` }]}
+      >
+        <Feather name={icon as any} size={19} color={colors.primary} />
       </View>
-      <Text style={[styles.rowDesc, { color: colors.mutedForeground }]}>{description}</Text>
-      {statusKind === 'pending' && onRequest && (
-        <TouchableOpacity
-          style={[styles.requestBtn, { backgroundColor: colors.primary }]}
-          onPress={handlePress}
-          disabled={loading}
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowTitle, { color: colors.cardForeground }]}>
+          {title}
+        </Text>
+        <Text style={[styles.rowDetail, { color: colors.mutedForeground }]}>
+          {detail}
+        </Text>
+      </View>
+      <View
+        style={[
+          styles.statusBadge,
+          { backgroundColor: healthy ? "#38B77A20" : "#D9903520" },
+        ]}
+      >
+        <View
+          style={[
+            styles.statusDot,
+            { backgroundColor: healthy ? "#38B77A" : "#D99035" },
+          ]}
+        />
+        <Text
+          style={[
+            styles.statusText,
+            { color: healthy ? "#2B8B61" : "#B26F20" },
+          ]}
         >
-          <Text style={[styles.requestBtnText, { color: colors.primaryForeground }]}>
-            {loading ? 'Opening settings…' : 'Request permission'}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </Animated.View>
+          {status}
+        </Text>
+      </View>
+    </View>
   );
 }
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
-
-export default function PermissionsScreen() {
+export default function DataPipelineScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const nativeAvailable = isNativeCaptureAvailable();
+  const queryClient = useQueryClient();
+  const { data: status, refetch } = useGetSentinelStatus();
+  const sync = useSyncSentinel();
+  const analyze = useAnalyzeCognitive();
+  const [result, setResult] = useState<string | null>(null);
+  const working = sync.isPending || analyze.isPending;
 
-  const [status, setStatus] = useState<NativeCaptureStatus>({
-    notificationListenerEnabled: false,
-    usageStatsEnabled: false,
-    shareTargetEnabled: false,
-  });
+  const runPipeline = async () => {
+    if (working) return;
+    setResult("Pulling protected LifeOps signals…");
+    try {
+      const synced = await sync.mutateAsync();
+      if (synced.ingested > 0) {
+        setResult("Opus 4.8 is extracting suspected distortions and beliefs…");
+        await analyze.mutateAsync();
+      }
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({
+          queryKey: getGetSentinelStatusQueryKey(),
+        }),
+        queryClient.invalidateQueries({ queryKey: getListTelemetryQueryKey() }),
+        queryClient.invalidateQueries({
+          queryKey: getGetCognitiveMapQueryKey(),
+        }),
+      ]);
+      setResult(
+        synced.ingested > 0
+          ? `${synced.ingested} new signal${synced.ingested === 1 ? "" : "s"} processed. ${synced.filteredClinical + synced.filteredLocation} protected.`
+          : `Already current. ${synced.filteredClinical + synced.filteredLocation} protected.`,
+      );
+    } catch {
+      setResult(
+        "The pipeline could not complete. Check the server credential and try again.",
+      );
+    }
+  };
 
-  useEffect(() => {
-    getNativeCaptureStatus().then(setStatus).catch(() => {});
-  }, []);
-
-  const refreshStatus = useCallback(async () => {
-    const s = await getNativeCaptureStatus();
-    setStatus(s);
-  }, []);
-
-  const handleNotification = useCallback(async () => {
-    await requestNotificationListenerPermission();
-    await refreshStatus();
-  }, [refreshStatus]);
-
-  const handleUsageStats = useCallback(async () => {
-    await requestUsageStatsPermission();
-    await refreshStatus();
-  }, [refreshStatus]);
-
-  function notifStatus(): StatusKind {
-    if (!nativeAvailable) return 'unavailable';
-    return status.notificationListenerEnabled ? 'granted' : 'pending';
-  }
-
-  function usageStatus(): StatusKind {
-    if (!nativeAvailable) return 'unavailable';
-    return status.usageStatsEnabled ? 'granted' : 'pending';
-  }
+  const lastSync = status?.lastSyncAt
+    ? new Date(status.lastSyncAt).toLocaleString()
+    : "No successful sync in this server session";
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: 16, paddingBottom: insets.bottom + 40 },
+          { paddingBottom: insets.bottom + 36 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Intro */}
-        <Animated.View entering={FadeInDown.duration(500)} style={styles.intro}>
-          <View style={[styles.introIcon, { backgroundColor: `${colors.primary}22` }]}>
-            <Feather name="radio" size={28} color={colors.primary} />
+        <View style={styles.hero}>
+          <View
+            style={[
+              styles.heroIcon,
+              { backgroundColor: `${colors.primary}18` },
+            ]}
+          >
+            <Feather name="git-merge" size={28} color={colors.primary} />
           </View>
-          <Text style={[styles.introTitle, { color: colors.foreground }]}>
-            Ambient Capture
+          <Text style={[styles.title, { color: colors.foreground }]}>
+            Data Pipeline
           </Text>
-          <Text style={[styles.introBody, { color: colors.mutedForeground }]}>
-             Belief Analyzer can passively capture thought-related data from
-            your Android device — notifications, app usage, and shared text —
-            to build a richer cognitive conceptualization without manual entry.
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            LifeOps collects phone-screen telemetry. Belief Analyzer filters it,
+            then Opus 4.8 identifies suspected automatic thoughts, distortions,
+            beliefs, and core schemas.
           </Text>
-          {!nativeAvailable && Platform.OS !== 'android' && (
-            <View
-              style={[styles.platformNote, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}44` }]}
-            >
-              <Feather name="info" size={14} color={colors.primary} />
-              <Text style={[styles.platformNoteText, { color: colors.primary }]}>
-                Ambient capture requires an Android device with the custom dev
-                build installed. See the native integration spec for setup.
-              </Text>
-            </View>
-          )}
-          {!nativeAvailable && Platform.OS === 'android' && (
-            <View
-              style={[styles.platformNote, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}44` }]}
-            >
-              <Feather name="info" size={14} color={colors.primary} />
-              <Text style={[styles.platformNoteText, { color: colors.primary }]}>
-                Running in Expo Go — native modules unavailable. Build the custom
-                dev build to enable capture. See docs/native-integration-spec.md.
-              </Text>
-            </View>
-          )}
-        </Animated.View>
+        </View>
 
-        {/* Permission rows */}
         <View style={styles.rows}>
-          <PermissionRow
-            index={0}
-            icon="bell"
-            title="Notification Listener"
-            description="Reads notification content from other apps to extract thought-related text. Only processes text snippets — not images, media, or notification actions."
-            statusKind={notifStatus()}
-            onRequest={nativeAvailable ? handleNotification : undefined}
+          <PipelineRow
+            icon="smartphone"
+            title="LifeOps Sentinel"
+            detail={`Server-side telemetry source · ${lastSync}`}
+            status={status?.configured ? "Connected" : "Needs key"}
+            healthy={Boolean(status?.configured)}
           />
-          <PermissionRow
-            index={1}
-            icon="bar-chart-2"
-            title="Usage Statistics"
-            description="Records which apps are in the foreground as situational context for your thought log. Stores app package names and timestamps only — no content."
-            statusKind={usageStatus()}
-            onRequest={nativeAvailable ? handleUsageStats : undefined}
+          <PipelineRow
+            icon="shield"
+            title="Clinical-content firewall"
+            detail="Clinical/EHR matches and location events are rejected before database storage or AI analysis. Raw LifeOps metadata is discarded."
+            status="Enabled"
+            healthy={status?.clinicalFilterEnabled ?? true}
           />
-          <PermissionRow
-            index={2}
-            icon="share-2"
-            title="Share Target"
-             description="Lets you share text from another app into Belief Analyzer as a thought entry when the native share integration is installed."
-            statusKind="unavailable"
+          <PipelineRow
+            icon="cpu"
+            title="Cognitive engine"
+            detail="Layered extraction: automatic thoughts → distortions → intermediate beliefs → core schemas."
+            status="Opus 4.8"
+            healthy={status?.model === "claude-opus-4-8"}
           />
         </View>
 
-        {/* Disclaimer */}
-        <Animated.View
-          entering={FadeInDown.delay(320).duration(500)}
-          style={[styles.disclaimer, { backgroundColor: colors.muted, borderColor: colors.border }]}
+        <TouchableOpacity
+          style={[
+            styles.button,
+            { backgroundColor: working ? colors.secondary : colors.primary },
+          ]}
+          onPress={runPipeline}
+          disabled={working}
+          accessibilityRole="button"
         >
-          <Feather name="shield" size={16} color={colors.mutedForeground} />
-          <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
-             Captured text is stored by this app's Render backend. When you run
-             Analyse, use Check-In analysis, or chat with Vera, relevant text is
-             sent to Claude (Anthropic) to extract patterns or generate coaching
-             replies. Do not capture passwords, financial details, medical records,
-             or anything you would not send to an AI provider. This is a personal
-             self-help tool, not a medical device or clinical service.
+          {working ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Feather name="zap" size={17} color={colors.primaryForeground} />
+          )}
+          <Text
+            style={[
+              styles.buttonText,
+              {
+                color: working
+                  ? colors.mutedForeground
+                  : colors.primaryForeground,
+              },
+            ]}
+          >
+            {working ? "Running pipeline…" : "Test sync and analysis"}
           </Text>
-        </Animated.View>
+        </TouchableOpacity>
 
-        {/* Dev build reference */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.devNote}>
-          <Text style={[styles.devNoteLabel, { color: colors.mutedForeground }]}>
-            Implementation guide
+        {result && (
+          <View
+            style={[
+              styles.result,
+              { backgroundColor: colors.muted, borderColor: colors.border },
+            ]}
+          >
+            <Feather name="activity" size={15} color={colors.primary} />
+            <Text style={[styles.resultText, { color: colors.foreground }]}>
+              {result}
+            </Text>
+          </View>
+        )}
+
+        <View style={[styles.note, { borderColor: colors.border }]}>
+          <Feather name="info" size={15} color={colors.mutedForeground} />
+          <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
+            This is a personal pattern-finding tool, not a diagnosis. Insights
+            are suspected patterns for your review and may be wrong.
           </Text>
-          <Text style={[styles.devNotePath, { color: colors.accent }]}>
-            docs/native-integration-spec.md
-          </Text>
-        </Animated.View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -265,74 +232,79 @@ export default function PermissionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 20, gap: 20 },
-
-  intro: { gap: 12, alignItems: 'center' },
-  introIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  scroll: { paddingHorizontal: 20, paddingTop: 20, gap: 18 },
+  hero: { alignItems: "center", gap: 9, paddingBottom: 4 },
+  heroIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  introTitle: { fontSize: 22, fontFamily: 'Inter_700Bold', textAlign: 'center' },
-  introBody: {
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    lineHeight: 22,
-    textAlign: 'center',
+  title: { fontSize: 25, fontFamily: "Inter_700Bold" },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
   },
-  platformNote: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'flex-start',
-  },
-  platformNoteText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, flex: 1 },
-
-  rows: { gap: 12 },
+  rows: { gap: 11 },
   row: {
-    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 11,
     borderWidth: 1,
-    padding: 16,
-    overflow: 'hidden',
-    gap: 10,
-  },
-  rowHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', flex: 1 },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  rowDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20 },
-  requestBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  requestBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-
-  disclaimer: {
-    flexDirection: 'row',
-    gap: 10,
+    borderRadius: 16,
     padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'flex-start',
   },
-  disclaimerText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20, flex: 1 },
-
-  devNote: { gap: 4, alignItems: 'center' },
-  devNoteLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
-  devNotePath: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowCopy: { flex: 1, gap: 4 },
+  rowTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  rowDetail: { fontSize: 12, lineHeight: 18, fontFamily: "Inter_400Regular" },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  button: {
+    minHeight: 50,
+    borderRadius: 16,
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonText: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  result: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 13,
+    padding: 12,
+  },
+  resultText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: "Inter_400Regular",
+  },
+  note: { flexDirection: "row", gap: 8, borderTopWidth: 1, paddingTop: 14 },
+  noteText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: "Inter_400Regular",
+  },
 });

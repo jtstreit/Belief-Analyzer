@@ -18,7 +18,10 @@ const sentinels = vi.hoisted(() => ({
   telemetryEventsTable: { _name: "telemetry" } as object,
   automaticThoughtsTable: { _name: "thoughts" } as object,
   // beliefText is a column marker so tests can assert it is the conflict target
-  intermediateBeliefsCogTable: { _name: "ibeliefs", beliefText: { _col: "beliefText" } },
+  intermediateBeliefsCogTable: {
+    _name: "ibeliefs",
+    beliefText: { _col: "beliefText" },
+  },
   coreSchemasTable: { _name: "schemas" } as object,
 }));
 
@@ -34,7 +37,11 @@ const state = vi.hoisted(() => ({
   // Capture sink for events marked processed inside transaction
   processedEventIds: [] as number[],
   // Capture sink for onConflictDoUpdate calls: records conflict target + set payload
-  conflictUpserts: [] as Array<{ table: object; target: unknown; set: unknown }>,
+  conflictUpserts: [] as Array<{
+    table: object;
+    target: unknown;
+    set: unknown;
+  }>,
   // Capture sink for db.delete().where().returning() calls
   deleted: [] as Array<{ table: object; returning: unknown[] }>,
   // Controls whether transaction rolls back (simulates DB failure)
@@ -88,7 +95,11 @@ vi.mock("@workspace/db", () => {
         // Return a custom object so onConflictDoUpdate arguments are captured.
         const afterValues: Record<string, unknown> = {
           onConflictDoUpdate: (opts: { target: unknown; set: unknown }) => {
-            state.conflictUpserts.push({ table, target: opts.target, set: opts.set });
+            state.conflictUpserts.push({
+              table,
+              target: opts.target,
+              set: opts.set,
+            });
             return chain(undefined);
           },
         };
@@ -168,7 +179,11 @@ vi.mock("@workspace/db", () => {
     coreSchemasTable: sentinels.coreSchemasTable,
     // Drizzle helpers — return their arguments so they can be checked
     isNull: vi.fn((col: unknown) => ({ op: "isNull", col })),
-    inArray: vi.fn((col: unknown, ids: unknown) => ({ op: "inArray", col, ids })),
+    inArray: vi.fn((col: unknown, ids: unknown) => ({
+      op: "inArray",
+      col,
+      ids,
+    })),
     desc: vi.fn((col: unknown) => ({ op: "desc", col })),
     eq: vi.fn((col: unknown, val: unknown) => ({ op: "eq", col, val })),
     and: vi.fn((...conds: unknown[]) => ({ op: "and", conds })),
@@ -199,7 +214,10 @@ const { default: app } = await import("../../app.js");
 const agent = supertest(app);
 
 /** Minimal telemetry event row with meaningful content */
-function makeTelemetryRow(id: number, thoughtText = "I always fail at everything") {
+function makeTelemetryRow(
+  id: number,
+  thoughtText = "I always fail at everything",
+) {
   return {
     id,
     type: "thought_entry",
@@ -318,7 +336,11 @@ describe("POST /api/cognitive/analyze", () => {
     state.byTable.set(sentinels.telemetryEventsTable, [makeTelemetryRow(1)]);
     state.openaiQueue.push(
       JSON.stringify([
-        { entryIndex: 1, thoughtText: "Everything is catastrophic", intensityPct: 999 },
+        {
+          entryIndex: 1,
+          thoughtText: "Everything is catastrophic",
+          intensityPct: 999,
+        },
         { entryIndex: 1, thoughtText: "I feel nothing", intensityPct: -50 },
       ]),
       "[]",
@@ -335,7 +357,7 @@ describe("POST /api/cognitive/analyze", () => {
       (i) => (i.values as Record<string, unknown>)["intensityPct"],
     );
     expect(intensities).toContain(100); // 999 clamped to 100
-    expect(intensities).toContain(0);   // -50 clamped to 0
+    expect(intensities).toContain(0); // -50 clamped to 0
   });
 
   // ── Pass 1: malformed JSON propagates as 500 ──────────────────────────────
@@ -392,11 +414,11 @@ describe("POST /api/cognitive/analyze", () => {
     state.byTable.set(sentinels.telemetryEventsTable, [makeTelemetryRow(1)]);
     state.openaiQueue.push(
       JSON.stringify([
-        { entryIndex: 0, thoughtText: "index out of range" },    // entryIndex must be ≥1
-        { entryIndex: 1, thoughtText: "" },                      // empty thoughtText
-        { entryIndex: 1, thoughtText: "   " },                   // whitespace-only
-        null,                                                    // null item
-        "string item",                                           // wrong type
+        { entryIndex: 0, thoughtText: "index out of range" }, // entryIndex must be ≥1
+        { entryIndex: 1, thoughtText: "" }, // empty thoughtText
+        { entryIndex: 1, thoughtText: "   " }, // whitespace-only
+        null, // null item
+        "string item", // wrong type
         { entryIndex: 1, thoughtText: "This one is valid", emotion: "sadness" },
       ]),
       "[]",
@@ -417,9 +439,10 @@ describe("POST /api/cognitive/analyze", () => {
 
   // ── Pass 1: events without meaningful content are marked processed eagerly ─
   it("Pass 1 — no-content events: processedAt is set without calling LLM", async () => {
-    const { veraComplete } = await import("@workspace/integrations-openai-ai-server");
-    const emptyEvent = makeTelemetryRow(1, "");    // empty text → withoutContent
-    const shortEvent = makeTelemetryRow(2, "ok");  // ≤5 chars → withoutContent
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
+    const emptyEvent = makeTelemetryRow(1, ""); // empty text → withoutContent
+    const shortEvent = makeTelemetryRow(2, "ok"); // ≤5 chars → withoutContent
     state.byTable.set(sentinels.telemetryEventsTable, [emptyEvent, shortEvent]);
 
     const res = await agent.post("/api/cognitive/analyze");
@@ -440,6 +463,58 @@ describe("POST /api/cognitive/analyze", () => {
         (u.set as Record<string, unknown>)?.["processedAt"] instanceof Date,
     );
     expect(processedUpdates.length).toBeGreaterThan(0);
+  });
+
+  it("Pass 1 — clinical content is consumed without being sent to the LLM", async () => {
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
+    state.byTable.set(sentinels.telemetryEventsTable, [
+      {
+        ...makeTelemetryRow(3, "Credible client service note sign and submit"),
+        source: "lifeops::com.android.chrome",
+      },
+    ]);
+
+    const res = await agent.post("/api/cognitive/analyze");
+    expect(res.status).toBe(200);
+    expect((veraComplete as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(
+      0,
+    );
+    expect(
+      state.updated.some(
+        (update) =>
+          update.table === sentinels.telemetryEventsTable &&
+          (update.set as Record<string, unknown>)?.["processedAt"] instanceof
+            Date,
+      ),
+    ).toBe(true);
+  });
+
+  it("Pass 1 — app usage is included as context and consumed after a successful model pass", async () => {
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
+    state.byTable.set(sentinels.telemetryEventsTable, [
+      {
+        ...makeTelemetryRow(4, "App usage: YouTube\n20 minutes foreground"),
+        type: "app_usage",
+        source: "lifeops::com.google.android.youtube",
+      },
+    ]);
+    state.openaiQueue.push("[]");
+
+    const res = await agent.post("/api/cognitive/analyze");
+    expect(res.status).toBe(200);
+    expect((veraComplete as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(
+      1,
+    );
+    expect(
+      state.updated.some(
+        (update) =>
+          update.table === sentinels.telemetryEventsTable &&
+          (update.set as Record<string, unknown>)?.["processedAt"] instanceof
+            Date,
+      ),
+    ).toBe(true);
   });
 
   // ── Pass 2: malformed JSON silently falls back, route returns 200 ─────────
@@ -515,7 +590,7 @@ describe("POST /api/cognitive/analyze", () => {
     ]);
     state.openaiQueue.push(
       JSON.stringify([
-        { beliefText: "", category: "rule", matchesExistingId: null },   // empty → skipped
+        { beliefText: "", category: "rule", matchesExistingId: null }, // empty → skipped
         { beliefText: "  ", category: "rule", matchesExistingId: null }, // whitespace → skipped
         {
           beliefText: "Valid belief",
@@ -601,22 +676,26 @@ describe("POST /api/cognitive/analyze", () => {
 
   // ── Pass 3: fewer than 2 beliefs → Pass 3 is skipped entirely ────────────
   it("Pass 3 — only 1 intermediate belief: LLM not called for Pass 3", async () => {
-    const { veraComplete } = await import("@workspace/integrations-openai-ai-server");
-    state.byTable.set(sentinels.intermediateBeliefsCogTable, [makeBeliefRow(1)]);
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
+    state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+      makeBeliefRow(1),
+    ]);
     // Pass 2 would need thoughts to trigger; leave thoughts empty so no LLM calls expected
     // (Pass 3 threshold is ≥2 beliefs)
 
     const res = await agent.post("/api/cognitive/analyze");
     expect(res.status).toBe(200);
     // No LLM calls because: no thoughts (Pass 2 skipped), <2 beliefs (Pass 3 skipped)
-    expect(
-      (veraComplete as ReturnType<typeof vi.fn>).mock.calls,
-    ).toHaveLength(0);
+    expect((veraComplete as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(
+      0,
+    );
   });
 
   // ── Pass 2+3 run even when Pass 1 extracted nothing new ───────────────────
   it("Passes 2 and 3 run even when there are no new telemetry events", async () => {
-    const { veraComplete } = await import("@workspace/integrations-openai-ai-server");
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
     // Pre-existing thoughts trigger Pass 2; pre-existing beliefs trigger Pass 3
     state.byTable.set(sentinels.automaticThoughtsTable, [
       makeThoughtRow(1),
@@ -632,9 +711,9 @@ describe("POST /api/cognitive/analyze", () => {
     const res = await agent.post("/api/cognitive/analyze");
     expect(res.status).toBe(200);
     // LLM should have been called twice (Pass 2 + Pass 3)
-    expect(
-      (veraComplete as ReturnType<typeof vi.fn>).mock.calls,
-    ).toHaveLength(2);
+    expect((veraComplete as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(
+      2,
+    );
   });
 
   // ── Constraint: duplicate beliefText must accumulate evidence, not create a second row ──
@@ -649,8 +728,18 @@ describe("POST /api/cognitive/analyze", () => {
     const beliefText = "I must never make mistakes";
     state.openaiQueue.push(
       JSON.stringify([
-        { beliefText, category: "rule", matchesExistingId: null, initialConfidence: 25 },
-        { beliefText, category: "rule", matchesExistingId: null, initialConfidence: 25 },
+        {
+          beliefText,
+          category: "rule",
+          matchesExistingId: null,
+          initialConfidence: 25,
+        },
+        {
+          beliefText,
+          category: "rule",
+          matchesExistingId: null,
+          initialConfidence: 25,
+        },
       ]),
       "[]", // Pass 3
     );
@@ -674,7 +763,9 @@ describe("POST /api/cognitive/analyze", () => {
     // The conflict target must be the beliefText column (not the id or any
     // other column) — this mirrors the unique index on belief_text.
     for (const upsert of beliefUpserts) {
-      expect(upsert.target).toBe(sentinels.intermediateBeliefsCogTable.beliefText);
+      expect(upsert.target).toBe(
+        sentinels.intermediateBeliefsCogTable.beliefText,
+      );
     }
 
     // The set payload must increment evidenceCount, not reset it to a literal 1.
@@ -702,8 +793,18 @@ describe("POST /api/cognitive/analyze", () => {
     const schemaText = "I am fundamentally incapable";
     state.openaiQueue.push(
       JSON.stringify([
-        { schemaText, domain: "helpless", matchesExistingId: null, initialConfidence: 20 },
-        { schemaText, domain: "helpless", matchesExistingId: null, initialConfidence: 20 },
+        {
+          schemaText,
+          domain: "helpless",
+          matchesExistingId: null,
+          initialConfidence: 20,
+        },
+        {
+          schemaText,
+          domain: "helpless",
+          matchesExistingId: null,
+          initialConfidence: 20,
+        },
       ]),
     );
 
@@ -792,7 +893,9 @@ describe("POST /api/cognitive/analyze", () => {
 
       // Instead both tables receive a status:"dismissed" update.
       const dismissalTables = state.updated
-        .filter((u) => (u.set as Record<string, unknown>)?.["status"] === "dismissed")
+        .filter(
+          (u) => (u.set as Record<string, unknown>)?.["status"] === "dismissed",
+        )
         .map((u) => u.table);
       expect(dismissalTables).toContain(sentinels.intermediateBeliefsCogTable);
       expect(dismissalTables).toContain(sentinels.coreSchemasTable);
@@ -800,7 +903,9 @@ describe("POST /api/cognitive/analyze", () => {
 
     it("response shape is unchanged after pruning (map fields all present)", async () => {
       state.byTable.set(sentinels.automaticThoughtsTable, [makeThoughtRow(1)]);
-      state.byTable.set(sentinels.intermediateBeliefsCogTable, [makeBeliefRow(1)]);
+      state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+        makeBeliefRow(1),
+      ]);
 
       const res = await agent.post("/api/cognitive/analyze");
       expect(res.status).toBe(200);
@@ -828,7 +933,9 @@ describe("POST /api/cognitive/analyze", () => {
 
     it("reflects pre-existing data from the DB", async () => {
       state.byTable.set(sentinels.automaticThoughtsTable, [makeThoughtRow(1)]);
-      state.byTable.set(sentinels.intermediateBeliefsCogTable, [makeBeliefRow(1)]);
+      state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+        makeBeliefRow(1),
+      ]);
 
       const res = await agent.get("/api/cognitive/map");
       expect(res.status).toBe(200);

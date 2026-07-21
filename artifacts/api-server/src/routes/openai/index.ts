@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { db, conversations as convTable, messages as msgTable, beliefsTable, exerciseSessions, exercisesTable } from "@workspace/db";
+import { db, conversations as convTable, messages as msgTable, beliefsTable, automaticThoughtsTable, exerciseSessions, exercisesTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { veraComplete } from "@workspace/integrations-openai-ai-server";
 import {
   CreateOpenaiConversationBody,
   SendOpenaiMessageBody,
 } from "@workspace/api-zod";
+import { buildConversationFocusBlock } from "./conversation-focus";
 
 const router = Router();
 
@@ -60,7 +61,7 @@ const BELIEF_TYPE_TO_PROCESSES: Record<string, string[]> = {
 };
 
 /**
- * Detects whether Vera recommended a specific exercise in her response.
+ * Detects whether the structured guide recommended a specific exercise.
  * When `activeProcesses` is non-empty, only returns an exercise whose
  * targetProcesses overlaps with the user's currently active belief processes —
  * preventing false positives when an exercise is mentioned only in passing.
@@ -98,7 +99,7 @@ const SAFETY_BOUNDARIES = `**Hard boundaries:**
 - Never pressure the user to complete an exercise, remain in an exposure, or perform a shame-attacking task. Offer choices and respect refusal.
 - Use tentative language such as "possible pattern", "hypothesis", and "you might explore". Never promise an outcome.`;
 
-const REBT_SYSTEM_PROMPT = `You are Vera, a warm self-help REBT (Rational Emotive Behavior Therapy) coach informed by Albert Ellis's ABC(DE) model. You are not a licensed clinician.
+const REBT_SYSTEM_PROMPT = `You are a bounded self-help REBT (Rational Emotive Behavior Therapy) guide informed by Albert Ellis's ABC(DE) model. You are not a person, therapist, or licensed clinician.
 
 **Your coaching framework — REBT (self-help):**
 - The ABC(DE) model: A (Activating event) → B (Irrational Belief) → C (Emotional/behavioural Consequence) → D (Disputing) → E (Effective new philosophy)
@@ -135,7 +136,7 @@ ${SAFETY_BOUNDARIES}`;
 // ─────────────────────────────────────────────────────────────
 // CBT system prompt — Beck / Burns / Greenberger & Padesky
 // ─────────────────────────────────────────────────────────────
-const CBT_SYSTEM_PROMPT = `You are Vera, a warm self-help CBT (Cognitive Behavioural Therapy) coach informed by Aaron Beck, David Burns, and Greenberger & Padesky. You are not a licensed clinician.
+const CBT_SYSTEM_PROMPT = `You are a bounded self-help CBT (Cognitive Behavioural Therapy) guide informed by Aaron Beck, David Burns, and Greenberger & Padesky. You are not a person, therapist, or licensed clinician.
 
 **Your coaching framework — Beckian CBT (self-help):**
 - Situation → Automatic Thoughts → Emotion/Behaviour, with underlying Intermediate Beliefs (rules, attitudes, assumptions) and Core Beliefs (schemas: helpless / unlovable / worthless)
@@ -203,9 +204,39 @@ router.post("/openai/conversations", async (req, res) => {
       return;
     }
 
+    const beliefId = parsed.data.beliefId;
+    const automaticThoughtId = parsed.data.automaticThoughtId;
+    const modality = parsed.data.modality ?? "rebt";
+    if (beliefId && automaticThoughtId) {
+      res.status(400).json({ error: "Choose either a belief or an automatic thought" });
+      return;
+    }
+
+    const [selectedBelief] = beliefId
+      ? await db.select().from(beliefsTable).where(eq(beliefsTable.id, beliefId))
+      : [];
+    const [selectedThought] = automaticThoughtId
+      ? await db
+          .select()
+          .from(automaticThoughtsTable)
+          .where(eq(automaticThoughtsTable.id, automaticThoughtId))
+      : [];
+    if (beliefId && !selectedBelief) {
+      res.status(404).json({ error: "Selected belief not found" });
+      return;
+    }
+    if (automaticThoughtId && !selectedThought) {
+      res.status(404).json({ error: "Selected automatic thought not found" });
+      return;
+    }
+
     const [conv] = await db
       .insert(convTable)
-      .values({ title: parsed.data.title })
+      .values({
+        title: parsed.data.title,
+        selectedBeliefId: beliefId ?? null,
+        selectedAutomaticThoughtId: automaticThoughtId ?? null,
+      })
       .returning();
 
     if (!conv) {
@@ -213,17 +244,9 @@ router.post("/openai/conversations", async (req, res) => {
       return;
     }
 
-    // If a beliefId is provided, link belief and send opening message
-    const beliefId = (parsed.data as { beliefId?: number }).beliefId;
-    const modality = (parsed.data as { modality?: string }).modality ?? "rebt";
-
-    if (beliefId) {
-      const [belief] = await db
-        .select()
-        .from(beliefsTable)
-        .where(eq(beliefsTable.id, beliefId));
-
-      if (belief) {
+    // Store the selected focus on the conversation so later turns reload the
+    // exact same record after navigation, process restart, or app restart.
+    if (beliefId && selectedBelief) {
         await db
           .update(beliefsTable)
           .set({ conversationId: conv.id })
@@ -231,23 +254,33 @@ router.post("/openai/conversations", async (req, res) => {
 
         const isREBT = modality !== "cbt";
         const openingContent = isREBT
-          ? `I can see you've been experiencing a pattern of **${belief.beliefType.replace(/_/g, " ")}**. The belief that "${belief.beliefText}" sounds like it's been difficult to carry.
+          ? `The selected focus is a possible **${selectedBelief.beliefType.replace(/_/g, " ")}** pattern: "${selectedBelief.beliefText}".
 
-${belief.triggerSituation ? `It seems this often comes up when ${belief.triggerSituation}.` : ""}
+${selectedBelief.triggerSituation ? `It may come up when ${selectedBelief.triggerSituation}.` : ""}
 
-I'd like to work through this using the **REBT model**. Can you tell me about a recent time this belief showed up — what was happening (A), what you felt (C)?`
-          : `I can see you've been experiencing a pattern related to **${belief.beliefType.replace(/_/g, " ")}**. The thought "${belief.beliefText}" sounds like it's been causing you distress.
+Use the **REBT model** to test it. What happened in one recent example (A), and what did you feel or do (C)?`
+          : `The selected focus is a possible **${selectedBelief.beliefType.replace(/_/g, " ")}** pattern: "${selectedBelief.beliefText}".
 
-${belief.triggerSituation ? `It seems this often comes up when ${belief.triggerSituation}.` : ""}
+${selectedBelief.triggerSituation ? `It may come up when ${selectedBelief.triggerSituation}.` : ""}
 
-I'd like to explore this using a **CBT approach** — examining the evidence for and against this thought. Can you tell me about a recent specific situation where this came up?`;
+Use a **CBT approach** to examine the evidence. What is one recent specific situation where this thought showed up?`;
 
         await db.insert(msgTable).values({
           conversationId: conv.id,
           role: "assistant",
           content: openingContent,
         });
-      }
+    } else if (automaticThoughtId && selectedThought) {
+      const openingContent = `The selected focus for this conversation is the suspected automatic thought: "${selectedThought.thoughtText}".
+
+${selectedThought.situation ? `Possible situation: ${selectedThought.situation}.` : ""}
+
+Treat it as a hypothesis. What evidence supports this thought, and what evidence might not fit it?`;
+      await db.insert(msgTable).values({
+        conversationId: conv.id,
+        role: "assistant",
+        content: openingContent,
+      });
     }
 
     res.status(201).json(conv);
@@ -374,9 +407,15 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     const modality = (parsed.data as { modality?: string }).modality ?? "rebt";
     const exerciseContext = (parsed.data as { exerciseContext?: string }).exerciseContext;
 
-    const [history, allBeliefs, pastConvos, recentExercises, catalog] = await Promise.all([
+    const [history, allBeliefs, focusedThoughtRows, pastConvos, recentExercises, catalog] = await Promise.all([
       db.select().from(msgTable).where(eq(msgTable.conversationId, id)).orderBy(msgTable.createdAt),
       db.select().from(beliefsTable).orderBy(desc(beliefsTable.createdAt)),
+      conv.selectedAutomaticThoughtId
+        ? db
+            .select()
+            .from(automaticThoughtsTable)
+            .where(eq(automaticThoughtsTable.id, conv.selectedAutomaticThoughtId))
+        : Promise.resolve([]),
       db.select().from(msgTable)
         .where(eq(msgTable.role, "assistant"))
         .orderBy(desc(msgTable.createdAt))
@@ -389,6 +428,11 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     ]);
 
     const exercisesById = new Map(catalog.map((e) => [e.id, e]));
+    const focusedBelief = conv.selectedBeliefId
+      ? allBeliefs.find((belief) => belief.id === conv.selectedBeliefId)
+      : undefined;
+    const focusedThought = focusedThoughtRows[0];
+    const focusBlock = buildConversationFocusBlock(focusedBelief, focusedThought);
 
     // Build persistent memory block
     const activeBeliefs = allBeliefs.filter(b => b.status === "active");
@@ -440,6 +484,8 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     });
 
     const memoryBlock = [
+      focusBlock,
+      "",
       "## Persistent User Memory",
       "",
       beliefLines.length > 0
@@ -515,7 +561,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
           )
         : null;
 
-    // Detect if Vera recommended an exercise and emit it as a structured event
+    // Detect a structured exercise recommendation and emit it as an event.
     const recommendedExercise = detectRecommendedExercise(fullResponse, activeProcesses, allowedIds);
     if (recommendedExercise) {
       res.write(`data: ${JSON.stringify({ recommendedExercise })}\n\n`);

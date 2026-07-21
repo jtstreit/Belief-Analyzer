@@ -270,7 +270,7 @@ export default function CheckInScreen() {
               </TouchableOpacity>
             </View>
             <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
-               We noticed some possible unhelpful thought patterns. Would you like to examine them with Vera?
+               We noticed some possible unhelpful thought patterns. Would you like to examine one with the structured guide?
             </Text>
             
             <ScrollView style={styles.beliefsList}>
@@ -287,7 +287,7 @@ export default function CheckInScreen() {
                       style={[styles.challengeButton, { backgroundColor: colors.primary }]}
                       onPress={() => handleChallenge(belief.id)}
                     >
-                       <Text style={[styles.challengeText, { color: colors.primaryForeground }]}>Work on this with Vera</Text>
+                       <Text style={[styles.challengeText, { color: colors.primaryForeground }]}>Work this pattern</Text>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>

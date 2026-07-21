@@ -68,7 +68,7 @@ function ExerciseRecommendationCard({
           <Feather name={exerciseMeta?.icon as any ?? 'activity'} size={20} color={activeColor} />
         </View>
         <View style={styles.recCardText}>
-          <Text style={[styles.recLabel, { color: colors.mutedForeground }]}>Vera recommends</Text>
+          <Text style={[styles.recLabel, { color: colors.mutedForeground }]}>Suggested next exercise</Text>
           <Text style={[styles.recTitle, { color: colors.foreground }]}>{exercise.title}</Text>
           {minutes && (
             <Text style={[styles.recMeta, { color: colors.mutedForeground }]}>~{minutes} min</Text>
@@ -244,7 +244,7 @@ export default function CoachSessionScreen() {
       console.error(e);
       if (!(e instanceof Error && e.name === 'AbortError')) {
         if (responseAccepted) {
-          setSendError('Your message was saved, but Vera could not complete the reply. The conversation has been refreshed; do not resend it.');
+          setSendError('Your message was saved, but the guide could not complete the reply. The conversation has been refreshed; do not resend it.');
           Alert.alert('Reply interrupted', 'Your message was saved. The conversation will refresh to avoid sending it twice.');
           void refetch();
         } else {
@@ -433,7 +433,7 @@ export default function CoachSessionScreen() {
           placeholderTextColor={colors.mutedForeground}
           multiline
           maxLength={1000}
-          accessibilityLabel="Message Vera"
+          accessibilityLabel="Message the structured guide"
         />
 
         <View style={styles.sendButtonWrapper}>

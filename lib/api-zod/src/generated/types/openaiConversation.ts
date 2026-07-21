@@ -9,5 +9,7 @@
 export interface OpenaiConversation {
   id: number;
   title: string;
+  selectedBeliefId?: number | null;
+  selectedAutomaticThoughtId?: number | null;
   createdAt: Date;
 }

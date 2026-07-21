@@ -1,11 +1,10 @@
 import React, { useEffect } from 'react';
-import { Alert, StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useListOpenaiConversations, useCreateOpenaiConversation } from '@workspace/api-client-react';
+import { useListOpenaiConversations } from '@workspace/api-client-react';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeInDown, useAnimatedStyle, useSharedValue,
   withRepeat, withSequence, withTiming, withSpring,
@@ -61,21 +60,7 @@ export default function CoachScreen() {
   const modalityLabel = MODALITY_LABELS[modality];
 
   const { data: conversations, isLoading, isError, refetch } = useListOpenaiConversations();
-  const createConversation = useCreateOpenaiConversation();
-
-  const handleNewSession = async () => {
-    Haptics.selectionAsync();
-    try {
-      const conv = await createConversation.mutateAsync({
-        data: { title: `${modalityLabel.short} Session — ${new Date().toLocaleDateString()}`, modality },
-      });
-      router.push(`/coach-session/${conv.id}?modality=${modality}`);
-    } catch (e) {
-      console.error(e);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Could not start session', 'Check your connection and try again.');
-    }
-  };
+  const handleChooseFocus = () => router.push('/(tabs)/mindmap' as any);
 
   const fabPulse = useSharedValue(1);
   useEffect(() => {
@@ -115,8 +100,8 @@ export default function CoachScreen() {
         <Feather name={modality === 'rebt' ? 'zap' : 'layers'} size={16} color={activeColor} />
         <Text style={[styles.contextText, { color: colors.mutedForeground }]}>
           {modality === 'rebt'
-            ? 'Vera will use the ABC(DE) model to challenge irrational beliefs through empirical, logical, and pragmatic disputation.'
-            : 'Vera will use Socratic questioning and thought records to identify cognitive distortions and examine evidence collaboratively.'}
+            ? 'A bounded REBT guide uses the ABC(DE) model for empirical, logical, and pragmatic disputation, then asks for a concrete next action.'
+            : 'A bounded CBT guide uses Socratic questions and thought records to examine evidence, then asks for a concrete next action.'}
         </Text>
       </View>
 
@@ -165,19 +150,12 @@ export default function CoachScreen() {
         <Animated.View style={fabStyle}>
           <TouchableOpacity
             style={[styles.newSessionButton, { backgroundColor: activeColor }]}
-            onPress={handleNewSession}
-           disabled={createConversation.isPending}
+            onPress={handleChooseFocus}
            accessibilityRole="button"
-           accessibilityLabel={`Start new ${modalityLabel.short} session`}
+           accessibilityLabel="Choose a thought or belief to work"
           >
-            {createConversation.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Feather name="plus" size={20} color="#fff" />
-                <Text style={styles.newSessionText}>New Session</Text>
-              </>
-            )}
+            <Feather name="target" size={20} color="#fff" />
+            <Text style={styles.newSessionText}>Choose a focus</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>

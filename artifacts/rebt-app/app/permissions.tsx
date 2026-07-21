@@ -91,7 +91,7 @@ export default function DataPipelineScreen() {
 
   const runPipeline = async () => {
     if (working) return;
-    setResult("Pulling protected LifeOps signals…");
+    setResult("Pulling LifeOps signals through the Monarch-work filter…");
     try {
       const synced = await sync.mutateAsync();
       if (synced.ingested > 0) {
@@ -110,8 +110,8 @@ export default function DataPipelineScreen() {
       ]);
       setResult(
         synced.ingested > 0
-          ? `${synced.ingested} new signal${synced.ingested === 1 ? "" : "s"} processed. ${synced.filteredClinical + synced.filteredLocation} protected.`
-          : `Already current. ${synced.filteredClinical + synced.filteredLocation} protected.`,
+          ? `${synced.ingested} new signal${synced.ingested === 1 ? "" : "s"} processed. ${synced.filteredClinical} Monarch-work protected.`
+          : `Already current. ${synced.filteredClinical} Monarch-work protected.`,
       );
     } catch {
       setResult(
@@ -162,8 +162,8 @@ export default function DataPipelineScreen() {
           />
           <PipelineRow
             icon="shield"
-            title="Clinical-content firewall"
-            detail="Clinical/EHR matches and location events are rejected before database storage or AI analysis. Raw LifeOps metadata is discarded."
+            title="Monarch-work firewall"
+            detail="Monarch work and EHR matches are rejected before database storage or AI analysis. Personal location and Microsoft context remains eligible. Raw LifeOps metadata is discarded."
             status="Enabled"
             healthy={status?.clinicalFilterEnabled ?? true}
           />

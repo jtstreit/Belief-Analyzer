@@ -400,6 +400,8 @@ export const DismissCoreSchemaResponse = zod.void()
 export const ListOpenaiConversationsResponseItem = zod.object({
   "id": zod.number(),
   "title": zod.string(),
+  "selectedBeliefId": zod.number().nullish(),
+  "selectedAutomaticThoughtId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListOpenaiConversationsResponse = zod.array(ListOpenaiConversationsResponseItem)
@@ -411,12 +413,15 @@ export const ListOpenaiConversationsResponse = zod.array(ListOpenaiConversations
 export const CreateOpenaiConversationBody = zod.object({
   "title": zod.string(),
   "beliefId": zod.number().optional(),
+  "automaticThoughtId": zod.number().optional(),
   "modality": zod.string().optional().describe('rebt or cbt — determines coach framework')
 })
 
 export const CreateOpenaiConversationResponse = zod.object({
   "id": zod.number(),
   "title": zod.string(),
+  "selectedBeliefId": zod.number().nullish(),
+  "selectedAutomaticThoughtId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -431,6 +436,8 @@ export const GetOpenaiConversationParams = zod.object({
 export const GetOpenaiConversationResponse = zod.object({
   "id": zod.number(),
   "title": zod.string(),
+  "selectedBeliefId": zod.number().nullish(),
+  "selectedAutomaticThoughtId": zod.number().nullish(),
   "createdAt": zod.coerce.date(),
   "messages": zod.array(zod.object({
   "id": zod.number(),

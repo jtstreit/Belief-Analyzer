@@ -49,7 +49,7 @@ function RootLayoutNav() {
         name="coach-session/[id]"
         options={{
           headerShown: true,
-          title: "Vera — Coach",
+          title: "Work This Thought",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
         }}

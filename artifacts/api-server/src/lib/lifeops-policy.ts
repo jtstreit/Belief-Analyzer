@@ -22,13 +22,13 @@ const LifeOpsEnvelopeSchema = z.object({
   logs: z.array(z.unknown()),
 });
 
-const CLINICAL_CONTENT =
-  /\b(?:credible(?:bh)?|cbh3|monarch|nctracks|nc-?topps|medicaid|iihs?|providerconnect|tru\s?care|proauth|patient|client\s+record|treatment\s+plan)\b|\bsign\s+and\s+submit\b|\b(?:svc|service|progress|clinical)\s+note\b/i;
+const MONARCH_WORK_CONTENT =
+  /(?:@|\b)monarchnc\.org\b|\b(?:credible(?:bh)?|cbh3|monarch(?:\s+nc)?|iihs?|bh[-\s]?davidson|nctracks|nc[-\s]?topps|providerconnect|tru\s?care|proauth)\b|\bsign\s+and\s+submit\b|\b(?:client|service|progress|clinical)\s+note\b/i;
 
 const MAX_SIGNAL_LENGTH = 8_000;
 
 export function isClinicalContent(text: string): boolean {
-  return CLINICAL_CONTENT.test(text);
+  return MONARCH_WORK_CONTENT.test(text);
 }
 
 export type LifeOpsDropReason =
@@ -95,8 +95,6 @@ export function normalizeLifeOpsEvent(raw: unknown): {
   if (!parsed.success) return { event: null, reason: "invalid" };
 
   const event = parsed.data;
-  if (event.source === "location") return { event: null, reason: "location" };
-
   const title = clean(event.title);
   const content = clean(event.content);
   const packageName = clean(event.packageName);

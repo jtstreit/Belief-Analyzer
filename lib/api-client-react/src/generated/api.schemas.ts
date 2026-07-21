@@ -201,6 +201,8 @@ export interface ApiError {
 export interface OpenaiConversation {
   id: number;
   title: string;
+  selectedBeliefId?: number | null;
+  selectedAutomaticThoughtId?: number | null;
   createdAt: string;
 }
 
@@ -215,6 +217,7 @@ export interface OpenaiMessage {
 export interface OpenaiConversationInput {
   title: string;
   beliefId?: number;
+  automaticThoughtId?: number;
   /** rebt or cbt — determines coach framework */
   modality?: string;
 }
@@ -230,6 +233,8 @@ export interface OpenaiMessageInput {
 export interface OpenaiConversationWithMessages {
   id: number;
   title: string;
+  selectedBeliefId?: number | null;
+  selectedAutomaticThoughtId?: number | null;
   createdAt: string;
   messages: OpenaiMessage[];
 }

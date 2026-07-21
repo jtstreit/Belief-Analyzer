@@ -1067,6 +1067,12 @@ components:
           type: integer
         title:
           type: string
+        selectedBeliefId:
+          type: integer
+          nullable: true
+        selectedAutomaticThoughtId:
+          type: integer
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1103,6 +1109,8 @@ components:
           type: string
         beliefId:
           type: integer
+        automaticThoughtId:
+          type: integer
         modality:
           type: string
           description: "rebt or cbt — determines coach framework"
@@ -1130,6 +1138,12 @@ components:
           type: integer
         title:
           type: string
+        selectedBeliefId:
+          type: integer
+          nullable: true
+        selectedAutomaticThoughtId:
+          type: integer
+          nullable: true
         createdAt:
           type: string
           format: date-time

@@ -23,6 +23,7 @@ import {
   useSyncSentinel,
   useDismissIntermediateBelief,
   useDismissCoreSchema,
+  useCreateOpenaiConversation,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Animated, {
@@ -35,6 +36,7 @@ import Animated, {
 import { Feather } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useModality } from "@/contexts/ModalityContext";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const AUTO_ANALYSE_KEY = "@rebt/auto_analyse";
@@ -141,6 +143,7 @@ export default function MindMapScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { modality } = useModality();
   const queryClient = useQueryClient();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [autoAnalyse, setAutoAnalyse] = useState(true);
@@ -180,7 +183,29 @@ export default function MindMapScreen() {
   const { mutateAsync: syncLifeOps } = useSyncSentinel();
   const dismissBelief = useDismissIntermediateBelief();
   const dismissSchema = useDismissCoreSchema();
+  const createConversation = useCreateOpenaiConversation();
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const handleWorkThought = useCallback(
+    async (automaticThoughtId: number) => {
+      try {
+        setAnalysisError(null);
+        const conversation = await createConversation.mutateAsync({
+          data: {
+            title: "Work this thought",
+            automaticThoughtId,
+            modality,
+          },
+        });
+        router.push(`/coach-session/${conversation.id}?modality=${modality}`);
+      } catch {
+        setAnalysisError(
+          "Could not open this thought. Check your connection and try again.",
+        );
+      }
+    },
+    [createConversation, modality, router],
+  );
 
   const handleAnalyze = useCallback(async () => {
     if (analysisLock.current) return;
@@ -501,6 +526,30 @@ export default function MindMapScreen() {
                           ))}
                       </View>
                     )}
+                    <TouchableOpacity
+                      style={[
+                        styles.workThoughtButton,
+                        { backgroundColor: colors.primary },
+                      ]}
+                      onPress={() => handleWorkThought(t.id)}
+                      disabled={createConversation.isPending}
+                      accessibilityRole="button"
+                      accessibilityLabel="Work this thought"
+                    >
+                      <Feather
+                        name="arrow-right-circle"
+                        size={15}
+                        color={colors.primaryForeground}
+                      />
+                      <Text
+                        style={[
+                          styles.workThoughtText,
+                          { color: colors.primaryForeground },
+                        ]}
+                      >
+                        Work this thought
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ))
               )}
@@ -827,6 +876,17 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   tagText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  workThoughtButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  workThoughtText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 
   // Distortion aggregate
   distGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

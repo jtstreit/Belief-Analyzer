@@ -43,7 +43,7 @@ describe("LifeOps PHI policy", () => {
     expect(result.filteredClinical).toBe(1);
   });
 
-  it("accepts app usage context while still dropping location", () => {
+  it("accepts app usage and location context while filtering only Monarch work content", () => {
     const result = applyLifeOpsPolicy({
       logs: [
         { ...baseEvent, id: "location", source: "location" },
@@ -58,12 +58,24 @@ describe("LifeOps PHI policy", () => {
       ],
     });
 
-    expect(result.accepted).toHaveLength(1);
-    expect(result.filteredLocation).toBe(1);
-    expect(result.accepted[0]).toMatchObject({
+    expect(result.accepted).toHaveLength(2);
+    expect(result.filteredLocation).toBe(0);
+    expect(result.accepted[1]).toMatchObject({
       type: "app_usage",
       thoughtText: "App usage: YouTube\n20 minutes foreground",
     });
+  });
+
+  it("keeps personal health and Microsoft context when it is not tied to Monarch work", () => {
+    const result = applyLifeOpsPolicy({
+      logs: [
+        { ...baseEvent, id: "personal-health", content: "Review my Medicaid treatment plan" },
+        { ...baseEvent, id: "personal-outlook", packageName: "com.microsoft.office.outlook", content: "Dinner reservation confirmation" },
+      ],
+    });
+
+    expect(result.accepted).toHaveLength(2);
+    expect(result.filteredClinical).toBe(0);
   });
 
   it("accepts future LifeOps source types instead of silently narrowing the feed", () => {

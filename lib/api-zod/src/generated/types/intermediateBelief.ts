@@ -5,6 +5,8 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IntermediateBeliefReviewStatus } from './intermediateBeliefReviewStatus';
+import type { IntermediateBeliefStatus } from './intermediateBeliefStatus';
 
 export interface IntermediateBelief {
   id: number;
@@ -12,6 +14,12 @@ export interface IntermediateBelief {
   category: string;
   confidence: number;
   evidenceCount: number;
+  status: IntermediateBeliefStatus;
+  /** @nullable */
+  dismissedAt: Date | null;
+  reviewStatus: IntermediateBeliefReviewStatus;
+  /** @nullable */
+  reviewedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

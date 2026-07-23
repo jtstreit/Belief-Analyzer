@@ -34,6 +34,8 @@ const state = vi.hoisted(() => ({
   inserted: [] as Array<{ table: object; values: unknown }>,
   // Capture sink for db.update().set().where() calls
   updated: [] as Array<{ table: object; set: unknown }>,
+  // Optional row returned by the next update, used by PATCH route tests.
+  nextUpdateResult: [] as unknown[],
   // Capture sink for events marked processed inside transaction
   processedEventIds: [] as number[],
   // Capture sink for onConflictDoUpdate calls: records conflict target + set payload
@@ -121,7 +123,9 @@ vi.mock("@workspace/db", () => {
         state.updated.push({ table, set: s });
         // Resolve to [] so `.returning()` consumers (decay/prune passes)
         // can read `.length` — no rows affected by default.
-        return chain([]);
+        const result = state.nextUpdateResult;
+        state.nextUpdateResult = [];
+        return chain(result);
       },
     })),
 
@@ -239,6 +243,8 @@ function makeThoughtRow(id: number, text = "I always fail") {
     intensityPct: 70,
     distortionTags: ["all_or_nothing"],
     telemetryEventId: null,
+    reviewStatus: "unreviewed",
+    reviewedAt: null,
     createdAt: new Date(),
   };
 }
@@ -251,6 +257,10 @@ function makeBeliefRow(id: number, text = "I must succeed or I'm worthless") {
     category: "rule",
     confidence: 30,
     evidenceCount: 2,
+    status: "active",
+    dismissedAt: null,
+    reviewStatus: "unreviewed",
+    reviewedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -262,6 +272,7 @@ function resetState() {
   state.openaiQueue.length = 0;
   state.inserted.length = 0;
   state.updated.length = 0;
+  state.nextUpdateResult = [];
   state.processedEventIds.length = 0;
   state.conflictUpserts.length = 0;
   state.deleted.length = 0;
@@ -525,6 +536,41 @@ describe("POST /api/cognitive/analyze", () => {
     ).toBe(true);
   });
 
+  it("Pass 2 — excludes rejected and irrelevant automatic thoughts", async () => {
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
+    state.byTable.set(sentinels.automaticThoughtsTable, [
+      {
+        ...makeThoughtRow(1, "This endorsed thought can inform patterns"),
+        reviewStatus: "endorsed",
+      },
+      {
+        ...makeThoughtRow(2, "This rejected suggestion is not mine"),
+        reviewStatus: "rejected",
+      },
+      {
+        ...makeThoughtRow(3, "This irrelevant suggestion should be ignored"),
+        reviewStatus: "irrelevant",
+      },
+    ]);
+    state.openaiQueue.push("[]");
+
+    const res = await agent.post("/api/cognitive/analyze");
+
+    expect(res.status).toBe(200);
+    expect(veraComplete).toHaveBeenCalledTimes(1);
+    const options = (veraComplete as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as {
+      messages: Array<{ content: string }>;
+    };
+    const prompt = options.messages[0]?.content ?? "";
+    expect(prompt).toContain("This endorsed thought can inform patterns");
+    expect(prompt).not.toContain("This rejected suggestion is not mine");
+    expect(prompt).not.toContain(
+      "This irrelevant suggestion should be ignored",
+    );
+  });
+
   // ── Pass 2: malformed JSON silently falls back, route returns 200 ─────────
   it("Pass 2 — malformed JSON: silently skipped, route returns 200 (graceful degradation)", async () => {
     // Provide enough thoughts to trigger Pass 2
@@ -617,6 +663,41 @@ describe("POST /api/cognitive/analyze", () => {
       (i) => i.table === sentinels.intermediateBeliefsCogTable,
     );
     expect(beliefInserts).toHaveLength(1);
+  });
+
+  it("Pass 3 — excludes rejected and irrelevant intermediate beliefs", async () => {
+    const { veraComplete } =
+      await import("@workspace/integrations-openai-ai-server");
+    state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+      {
+        ...makeBeliefRow(1, "This endorsed belief can inform schemas"),
+        reviewStatus: "endorsed",
+      },
+      makeBeliefRow(2, "This unreviewed belief remains a hypothesis"),
+      {
+        ...makeBeliefRow(3, "This rejected belief does not fit"),
+        reviewStatus: "rejected",
+      },
+      {
+        ...makeBeliefRow(4, "This irrelevant belief should be ignored"),
+        reviewStatus: "irrelevant",
+      },
+    ]);
+    state.openaiQueue.push("[]");
+
+    const res = await agent.post("/api/cognitive/analyze");
+
+    expect(res.status).toBe(200);
+    expect(veraComplete).toHaveBeenCalledTimes(1);
+    const options = (veraComplete as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as {
+      messages: Array<{ content: string }>;
+    };
+    const prompt = options.messages[0]?.content ?? "";
+    expect(prompt).toContain("This endorsed belief can inform schemas");
+    expect(prompt).toContain("This unreviewed belief remains a hypothesis");
+    expect(prompt).not.toContain("This rejected belief does not fit");
+    expect(prompt).not.toContain("This irrelevant belief should be ignored");
   });
 
   // ── Pass 3: malformed JSON silently falls back, route returns 200 ─────────
@@ -950,5 +1031,130 @@ describe("POST /api/cognitive/analyze", () => {
       expect(res.body.automaticThoughts).toHaveLength(1);
       expect(res.body.intermediateBeliefs).toHaveLength(1);
     });
+  });
+});
+
+describe("cognitive review endpoints", () => {
+  beforeEach(() => {
+    resetState();
+    vi.clearAllMocks();
+  });
+
+  it.each(["endorsed", "rejected", "irrelevant"] as const)(
+    "reviews an automatic thought as %s",
+    async (reviewStatus) => {
+      const updated = {
+        ...makeThoughtRow(11),
+        reviewStatus,
+        reviewedAt: new Date(),
+      };
+      state.nextUpdateResult = [updated];
+
+      const res = await agent
+        .patch("/api/cognitive/automatic-thoughts/11")
+        .send({ reviewStatus });
+
+      expect(res.status).toBe(200);
+      expect(res.body.reviewStatus).toBe(reviewStatus);
+      const reviewUpdate = state.updated.find(
+        (entry) => entry.table === sentinels.automaticThoughtsTable,
+      )?.set as Record<string, unknown>;
+      expect(reviewUpdate["reviewStatus"]).toBe(reviewStatus);
+      expect(reviewUpdate["reviewedAt"]).toBeInstanceOf(Date);
+    },
+  );
+
+  it("can reverse an automatic-thought review to unreviewed", async () => {
+    state.nextUpdateResult = [makeThoughtRow(11)];
+
+    const res = await agent
+      .patch("/api/cognitive/automatic-thoughts/11")
+      .send({ reviewStatus: "unreviewed" });
+
+    expect(res.status).toBe(200);
+    const reviewUpdate = state.updated.find(
+      (entry) => entry.table === sentinels.automaticThoughtsTable,
+    )?.set as Record<string, unknown>;
+    expect(reviewUpdate).toMatchObject({
+      reviewStatus: "unreviewed",
+      reviewedAt: null,
+    });
+  });
+
+  it("reviews an intermediate belief without changing lifecycle status", async () => {
+    const updated = {
+      ...makeBeliefRow(7),
+      reviewStatus: "endorsed",
+      reviewedAt: new Date(),
+    };
+    state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+      makeBeliefRow(7),
+    ]);
+    state.nextUpdateResult = [updated];
+
+    const res = await agent
+      .patch("/api/cognitive/intermediate-beliefs/7")
+      .send({ reviewStatus: "endorsed" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.reviewStatus).toBe("endorsed");
+    const reviewUpdate = state.updated.find(
+      (entry) => entry.table === sentinels.intermediateBeliefsCogTable,
+    )?.set as Record<string, unknown>;
+    expect(reviewUpdate["reviewStatus"]).toBe("endorsed");
+    expect(reviewUpdate).not.toHaveProperty("status");
+  });
+
+  it("does not endorse a dismissed intermediate belief", async () => {
+    state.byTable.set(sentinels.intermediateBeliefsCogTable, [
+      {
+        ...makeBeliefRow(7),
+        status: "dismissed",
+        dismissedAt: new Date(),
+      },
+    ]);
+
+    const res = await agent
+      .patch("/api/cognitive/intermediate-beliefs/7")
+      .send({ reviewStatus: "endorsed" });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: "A dismissed intermediate belief cannot be endorsed",
+    });
+    expect(state.updated).toHaveLength(0);
+  });
+
+  it.each([
+    ["/api/cognitive/automatic-thoughts/1", { reviewStatus: "maybe" }],
+    ["/api/cognitive/intermediate-beliefs/1", { reviewStatus: "false" }],
+    [
+      "/api/cognitive/automatic-thoughts/1",
+      { reviewStatus: "endorsed", unexpected: true },
+    ],
+  ])("rejects an invalid review body for %s", async (path, body) => {
+    const res = await agent.patch(path).send(body);
+
+    expect(res.status).toBe(400);
+    expect(state.updated).toHaveLength(0);
+  });
+
+  it.each([
+    "/api/cognitive/automatic-thoughts/not-a-number",
+    "/api/cognitive/intermediate-beliefs/not-a-number",
+  ])("rejects an invalid review id for %s", async (path) => {
+    const res = await agent.patch(path).send({ reviewStatus: "endorsed" });
+
+    expect(res.status).toBe(400);
+    expect(state.updated).toHaveLength(0);
+  });
+
+  it.each([
+    "/api/cognitive/automatic-thoughts/404",
+    "/api/cognitive/intermediate-beliefs/404",
+  ])("returns 404 when a reviewed item does not exist at %s", async (path) => {
+    const res = await agent.patch(path).send({ reviewStatus: "endorsed" });
+
+    expect(res.status).toBe(404);
   });
 });

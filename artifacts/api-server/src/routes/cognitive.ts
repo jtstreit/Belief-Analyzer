@@ -6,11 +6,35 @@ import {
   intermediateBeliefsCogTable,
   coreSchemasTable,
 } from "@workspace/db";
-import { isNull, inArray, desc, eq, sql, and, lt, lte } from "drizzle-orm";
+import {
+  isNull,
+  inArray,
+  desc,
+  eq,
+  sql,
+  and,
+  lt,
+  lte,
+  notInArray,
+} from "drizzle-orm";
 import { veraComplete } from "@workspace/integrations-openai-ai-server";
+import { z } from "zod/v4";
 import { isClinicalContent } from "../lib/lifeops-policy";
 
 const router = Router();
+const reviewStatusSchema = z.enum([
+  "unreviewed",
+  "endorsed",
+  "rejected",
+  "irrelevant",
+]);
+const cognitiveReviewBodySchema = z
+  .object({ reviewStatus: reviewStatusSchema })
+  .strict();
+
+function canInformSynthesis(item: { reviewStatus?: string | null }): boolean {
+  return item.reviewStatus !== "rejected" && item.reviewStatus !== "irrelevant";
+}
 
 // ─── Helper: assemble the full four-layer map from DB ──────────────────────
 
@@ -77,6 +101,41 @@ router.get("/cognitive/automatic-thoughts", async (req, res) => {
   }
 });
 
+// ─── PATCH /cognitive/automatic-thoughts/:id ──────────────────────────────
+
+router.patch("/cognitive/automatic-thoughts/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"]!);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const parsed = cognitiveReviewBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid review status" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(automaticThoughtsTable)
+      .set({
+        reviewStatus: parsed.data.reviewStatus,
+        reviewedAt:
+          parsed.data.reviewStatus === "unreviewed" ? null : new Date(),
+      })
+      .where(eq(automaticThoughtsTable.id, id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Automatic thought not found" });
+      return;
+    }
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Failed to review automatic thought");
+    res.status(500).json({ error: "Failed to review automatic thought" });
+  }
+});
+
 // ─── GET /cognitive/intermediate-beliefs ──────────────────────────────────
 
 router.get("/cognitive/intermediate-beliefs", async (req, res) => {
@@ -90,6 +149,55 @@ router.get("/cognitive/intermediate-beliefs", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to list intermediate beliefs");
     res.status(500).json({ error: "Failed to fetch intermediate beliefs" });
+  }
+});
+
+// ─── PATCH /cognitive/intermediate-beliefs/:id ─────────────────────────────
+
+router.patch("/cognitive/intermediate-beliefs/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"]!);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const parsed = cognitiveReviewBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid review status" });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(intermediateBeliefsCogTable)
+      .where(eq(intermediateBeliefsCogTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Intermediate belief not found" });
+      return;
+    }
+    if (
+      parsed.data.reviewStatus === "endorsed" &&
+      existing.status !== "active"
+    ) {
+      res.status(409).json({
+        error: "A dismissed intermediate belief cannot be endorsed",
+      });
+      return;
+    }
+
+    const [updated] = await db
+      .update(intermediateBeliefsCogTable)
+      .set({
+        reviewStatus: parsed.data.reviewStatus,
+        reviewedAt:
+          parsed.data.reviewStatus === "unreviewed" ? null : new Date(),
+      })
+      .where(eq(intermediateBeliefsCogTable.id, id))
+      .returning();
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Failed to review intermediate belief");
+    res.status(500).json({ error: "Failed to review intermediate belief" });
   }
 });
 
@@ -329,19 +437,20 @@ Return ONLY a valid JSON array — no markdown, no explanation.`;
         .limit(80),
       db.select().from(intermediateBeliefsCogTable),
     ]);
+    const synthesisThoughts = allThoughts.filter(canInformSynthesis);
 
-    if (allThoughts.length > 0) {
-      const thoughtsSummary = allThoughts
+    if (synthesisThoughts.length > 0) {
+      const thoughtsSummary = synthesisThoughts
         .map(
           (t) =>
-            `- "${t.thoughtText}" [${(t.distortionTags as string[]).join(", ") || "no distortions"}]`,
+            `- "${t.thoughtText}" [${(t.distortionTags as string[]).join(", ") || "no distortions"}; review:${t.reviewStatus ?? "unreviewed"}]`,
         )
         .join("\n");
 
       // Only active beliefs are offered to the LLM for confirmation —
-      // dismissed ones must not be reinforced or resurrected.
+      // dismissed or user-rejected ones must not be reinforced or resurrected.
       const activeIBeliefs = existingIBeliefs.filter(
-        (b) => b.status === "active",
+        (b) => b.status === "active" && canInformSynthesis(b),
       );
       const existingIText =
         activeIBeliefs.length > 0
@@ -385,8 +494,12 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
           const existing = existingIBeliefs.find(
             (e) => e.id === b.matchesExistingId,
           );
-          // Dismissed beliefs stay dismissed — never reinforce them.
-          if (existing && existing.status === "active") {
+          // Dismissed and user-rejected beliefs are never reinforced.
+          if (
+            existing &&
+            existing.status === "active" &&
+            canInformSynthesis(existing)
+          ) {
             await db
               .update(intermediateBeliefsCogTable)
               .set({
@@ -400,8 +513,8 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
           // Use onConflictDoUpdate so an exact-duplicate beliefText (caught by
           // the unique index) accumulates evidence rather than failing silently
           // or crashing the analysis run. setWhere keeps dismissed rows
-          // dismissed: the conflict update is a no-op for them, so a pruned
-          // belief cannot reappear on re-analysis.
+          // dismissed or user-rejected: the conflict update is a no-op for
+          // them, so model output cannot reverse a lifecycle or review choice.
           await db
             .insert(intermediateBeliefsCogTable)
             .values({
@@ -417,7 +530,7 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
                 confidence: sql`LEAST(95, ${intermediateBeliefsCogTable.confidence} + 10)`,
                 updatedAt: new Date(),
               },
-              setWhere: sql`${intermediateBeliefsCogTable.status} = 'active'`,
+              setWhere: sql`${intermediateBeliefsCogTable.status} = 'active' AND ${intermediateBeliefsCogTable.reviewStatus} NOT IN ('rejected', 'irrelevant')`,
             });
         }
       }
@@ -432,9 +545,10 @@ Only include beliefs supported by 2+ thoughts. Return ONLY valid JSON array.`;
         .orderBy(desc(intermediateBeliefsCogTable.confidence)),
       db.select().from(coreSchemasTable),
     ]);
+    const synthesisIBeliefs = allIBeliefs.filter(canInformSynthesis);
 
-    if (allIBeliefs.length >= 2) {
-      const beliefsSummary = allIBeliefs
+    if (synthesisIBeliefs.length >= 2) {
+      const beliefsSummary = synthesisIBeliefs
         .map(
           (b) =>
             `- "${b.beliefText}" (${b.category}, confidence:${b.confidence})`,
@@ -537,6 +651,10 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
         .where(
           and(
             eq(intermediateBeliefsCogTable.status, "active"),
+            notInArray(intermediateBeliefsCogTable.reviewStatus, [
+              "rejected",
+              "irrelevant",
+            ]),
             lt(intermediateBeliefsCogTable.updatedAt, fourteenDaysAgo),
           ),
         )
@@ -567,8 +685,8 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
     }
 
     // ── Maintenance pass 2: prune stale low-evidence entries ─────────
-    // Entries created over 30 days ago that were never confirmed by more
-    // than one analysis run and still have low confidence are almost
+    // Unreviewed entries created over 30 days ago that were never confirmed
+    // by more than one analysis run and still have low confidence are almost
     // certainly artefacts of a one-off session. They are DISMISSED, not
     // deleted — the row (and its unique text) stays behind so a later
     // analysis run cannot re-create the same belief from old thoughts.
@@ -582,6 +700,7 @@ Only include schemas supported by 3+ intermediate beliefs. Return ONLY valid JSO
         .where(
           and(
             eq(intermediateBeliefsCogTable.status, "active"),
+            eq(intermediateBeliefsCogTable.reviewStatus, "unreviewed"),
             lte(intermediateBeliefsCogTable.evidenceCount, 1),
             lt(intermediateBeliefsCogTable.confidence, 20),
             lt(intermediateBeliefsCogTable.createdAt, thirtyDaysAgo),

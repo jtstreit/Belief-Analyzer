@@ -206,7 +206,7 @@ export default function FeedScreen() {
 
   const handleScan = useCallback(async () => {
     if (isScanning) return;
-    setPipelineMessage("Pulling protected LifeOps signals…");
+    setPipelineMessage("Pulling LifeOps signals through the Monarch-work filter…");
     try {
       const sync = await syncSentinel.mutateAsync();
       const shouldAnalyze = sync.ingested > 0 || pendingCount > 0;
@@ -226,7 +226,7 @@ export default function FeedScreen() {
           queryKey: getGetSentinelStatusQueryKey(),
         }),
       ]);
-      const protectedCount = sync.filteredClinical + sync.filteredLocation;
+      const protectedCount = sync.filteredClinical;
       setPipelineMessage(
         sync.ingested > 0
           ? `${sync.ingested} new signal${sync.ingested === 1 ? "" : "s"} analysed${thoughtCount == null ? "" : ` · ${thoughtCount} suspected thoughts total`}${protectedCount > 0 ? ` · ${protectedCount} protected` : ""}`
@@ -320,7 +320,7 @@ export default function FeedScreen() {
             >
               {pipelineMessage ??
                 (sentinelStatus?.configured
-                  ? "Clinical and location content is filtered before analysis."
+                  ? "Monarch work and EHR content is filtered before analysis; personal context remains eligible."
                   : "Server connection needs its LifeOps ingest credential.")}
             </Text>
           </View>

@@ -5,11 +5,16 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OpenaiConversationWithMessagesCoachingApproach } from './openaiConversationWithMessagesCoachingApproach';
 import type { OpenaiMessage } from './openaiMessage';
 
 export interface OpenaiConversationWithMessages {
   id: number;
   title: string;
+  selectedBeliefId?: number | null;
+  selectedAutomaticThoughtId?: number | null;
+  selectedIntermediateBeliefId?: number | null;
+  coachingApproach: OpenaiConversationWithMessagesCoachingApproach;
   createdAt: Date;
   messages: OpenaiMessage[];
 }

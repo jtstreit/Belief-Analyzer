@@ -31,4 +31,26 @@ describe("buildConversationFocusBlock", () => {
     expect(block).toContain("mind_reading");
     expect(block).toContain("hypothesis, not a fact");
   });
+
+  it("persists an endorsed intermediate belief as a hypothesis", () => {
+    const block = buildConversationFocusBlock(undefined, undefined, {
+      id: 11,
+      beliefText: "If I disappoint someone, they will stop respecting me",
+      category: "assumption",
+      confidence: 82,
+      evidenceCount: 6,
+      reviewStatus: "endorsed",
+    });
+
+    expect(block).toContain("user-endorsed intermediate-belief hypothesis");
+    expect(block).toContain(
+      'Text: "If I disappoint someone, they will stop respecting me"',
+    );
+    expect(block).toContain("Category: assumption");
+    expect(block).toContain("82% confidence across 6 analysis runs");
+    expect(block).toContain("User review: endorsed");
+    expect(block).toContain("remains a hypothesis");
+    expect(block).toContain("not an objective fact");
+    expect(block).not.toContain("Type: suspected");
+  });
 });

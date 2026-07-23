@@ -309,6 +309,43 @@ paths:
                 items:
                   $ref: "#/components/schemas/AutomaticThought"
 
+  /cognitive/automatic-thoughts/{id}:
+    patch:
+      operationId: reviewAutomaticThought
+      tags: [cognitive]
+      summary: Save or revise the user's review of an automatic-thought suggestion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CognitiveReviewInput"
+      responses:
+        "200":
+          description: Updated automatic thought
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomaticThought"
+        "400":
+          description: Invalid id or review status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Automatic thought not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /cognitive/intermediate-beliefs:
     get:
       operationId: listIntermediateBeliefs
@@ -340,6 +377,41 @@ paths:
                   $ref: "#/components/schemas/CoreSchema"
 
   /cognitive/intermediate-beliefs/{id}:
+    patch:
+      operationId: reviewIntermediateBelief
+      tags: [cognitive]
+      summary: Save or revise the user's review of an intermediate-belief suggestion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CognitiveReviewInput"
+      responses:
+        "200":
+          description: Updated intermediate belief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntermediateBelief"
+        "400":
+          description: Invalid id or review status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Intermediate belief not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     delete:
       operationId: dismissIntermediateBelief
       tags: [cognitive]
@@ -760,6 +832,16 @@ components:
         - filteredInvalid
         - syncedAt
 
+    CognitiveReviewInput:
+      type: object
+      additionalProperties: false
+      properties:
+        reviewStatus:
+          type: string
+          enum: [unreviewed, endorsed, rejected, irrelevant]
+      required:
+        - reviewStatus
+
     AutomaticThought:
       type: object
       properties:
@@ -779,6 +861,12 @@ components:
             type: string
         telemetryEventId:
           type: ["integer", "null"]
+        reviewStatus:
+          type: string
+          enum: [unreviewed, endorsed, rejected, irrelevant]
+        reviewedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -786,6 +874,8 @@ components:
         - id
         - thoughtText
         - distortionTags
+        - reviewStatus
+        - reviewedAt
         - createdAt
 
     IntermediateBelief:
@@ -801,6 +891,18 @@ components:
           type: integer
         evidenceCount:
           type: integer
+        status:
+          type: string
+          enum: [active, dismissed]
+        dismissedAt:
+          type: ["string", "null"]
+          format: date-time
+        reviewStatus:
+          type: string
+          enum: [unreviewed, endorsed, rejected, irrelevant]
+        reviewedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -813,6 +915,10 @@ components:
         - category
         - confidence
         - evidenceCount
+        - status
+        - dismissedAt
+        - reviewStatus
+        - reviewedAt
         - createdAt
         - updatedAt
 
@@ -1073,12 +1179,21 @@ components:
         selectedAutomaticThoughtId:
           type: integer
           nullable: true
+        selectedIntermediateBeliefId:
+          type: integer
+          nullable: true
+        coachingApproach:
+          type: string
+          enum: [team_cbt, beck_cbt, rebt]
+          nullable: true
+          description: Persisted framework for new conversations; null on legacy rows
         createdAt:
           type: string
           format: date-time
       required:
         - id
         - title
+        - coachingApproach
         - createdAt
 
     OpenaiMessage:
@@ -1111,6 +1226,12 @@ components:
           type: integer
         automaticThoughtId:
           type: integer
+        intermediateBeliefId:
+          type: integer
+        coachingApproach:
+          type: string
+          enum: [team_cbt, beck_cbt, rebt]
+          description: Persisted coaching framework for this focus
         modality:
           type: string
           description: "rebt or cbt — determines coach framework"
@@ -1128,6 +1249,10 @@ components:
         exerciseContext:
           type: string
           description: "Optional context from a completed exercise to anchor the coaching"
+        coachingApproach:
+          type: string
+          enum: [team_cbt, beck_cbt, rebt]
+          description: "Explicit framework; supports legacy conversations without a persisted value"
       required:
         - content
 
@@ -1144,6 +1269,13 @@ components:
         selectedAutomaticThoughtId:
           type: integer
           nullable: true
+        selectedIntermediateBeliefId:
+          type: integer
+          nullable: true
+        coachingApproach:
+          type: string
+          enum: [team_cbt, beck_cbt, rebt]
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1154,6 +1286,7 @@ components:
       required:
         - id
         - title
+        - coachingApproach
         - createdAt
         - messages
 

@@ -7,7 +7,12 @@ export const conversations = pgTable("conversations", {
   title: text("title").notNull(),
   selectedBeliefId: integer("selected_belief_id"),
   selectedAutomaticThoughtId: integer("selected_automatic_thought_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  selectedIntermediateBeliefId: integer("selected_intermediate_belief_id"),
+  coachingApproach: text("coaching_approach")
+    .$type<"team_cbt" | "beck_cbt" | "rebt">(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({

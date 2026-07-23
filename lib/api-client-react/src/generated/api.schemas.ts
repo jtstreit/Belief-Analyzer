@@ -71,6 +71,30 @@ export interface SentinelSyncResult {
   syncedAt: string;
 }
 
+export type CognitiveReviewInputReviewStatus = typeof CognitiveReviewInputReviewStatus[keyof typeof CognitiveReviewInputReviewStatus];
+
+
+export const CognitiveReviewInputReviewStatus = {
+  unreviewed: 'unreviewed',
+  endorsed: 'endorsed',
+  rejected: 'rejected',
+  irrelevant: 'irrelevant',
+} as const;
+
+export interface CognitiveReviewInput {
+  reviewStatus: CognitiveReviewInputReviewStatus;
+}
+
+export type AutomaticThoughtReviewStatus = typeof AutomaticThoughtReviewStatus[keyof typeof AutomaticThoughtReviewStatus];
+
+
+export const AutomaticThoughtReviewStatus = {
+  unreviewed: 'unreviewed',
+  endorsed: 'endorsed',
+  rejected: 'rejected',
+  irrelevant: 'irrelevant',
+} as const;
+
 export interface AutomaticThought {
   id: number;
   /** @nullable */
@@ -83,8 +107,29 @@ export interface AutomaticThought {
   distortionTags: string[];
   /** @nullable */
   telemetryEventId?: number | null;
+  reviewStatus: AutomaticThoughtReviewStatus;
+  /** @nullable */
+  reviewedAt: string | null;
   createdAt: string;
 }
+
+export type IntermediateBeliefStatus = typeof IntermediateBeliefStatus[keyof typeof IntermediateBeliefStatus];
+
+
+export const IntermediateBeliefStatus = {
+  active: 'active',
+  dismissed: 'dismissed',
+} as const;
+
+export type IntermediateBeliefReviewStatus = typeof IntermediateBeliefReviewStatus[keyof typeof IntermediateBeliefReviewStatus];
+
+
+export const IntermediateBeliefReviewStatus = {
+  unreviewed: 'unreviewed',
+  endorsed: 'endorsed',
+  rejected: 'rejected',
+  irrelevant: 'irrelevant',
+} as const;
 
 export interface IntermediateBelief {
   id: number;
@@ -92,6 +137,12 @@ export interface IntermediateBelief {
   category: string;
   confidence: number;
   evidenceCount: number;
+  status: IntermediateBeliefStatus;
+  /** @nullable */
+  dismissedAt: string | null;
+  reviewStatus: IntermediateBeliefReviewStatus;
+  /** @nullable */
+  reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -198,11 +249,26 @@ export interface ApiError {
   error: string;
 }
 
+/**
+ * Persisted framework for new conversations; null on legacy rows
+ */
+export type OpenaiConversationCoachingApproach = typeof OpenaiConversationCoachingApproach[keyof typeof OpenaiConversationCoachingApproach] | null;
+
+
+export const OpenaiConversationCoachingApproach = {
+  team_cbt: 'team_cbt',
+  beck_cbt: 'beck_cbt',
+  rebt: 'rebt',
+} as const;
+
 export interface OpenaiConversation {
   id: number;
   title: string;
   selectedBeliefId?: number | null;
   selectedAutomaticThoughtId?: number | null;
+  selectedIntermediateBeliefId?: number | null;
+  /** Persisted framework for new conversations; null on legacy rows */
+  coachingApproach: OpenaiConversationCoachingApproach;
   createdAt: string;
 }
 
@@ -214,13 +280,40 @@ export interface OpenaiMessage {
   createdAt: string;
 }
 
+/**
+ * Persisted coaching framework for this focus
+ */
+export type OpenaiConversationInputCoachingApproach = typeof OpenaiConversationInputCoachingApproach[keyof typeof OpenaiConversationInputCoachingApproach];
+
+
+export const OpenaiConversationInputCoachingApproach = {
+  team_cbt: 'team_cbt',
+  beck_cbt: 'beck_cbt',
+  rebt: 'rebt',
+} as const;
+
 export interface OpenaiConversationInput {
   title: string;
   beliefId?: number;
   automaticThoughtId?: number;
+  intermediateBeliefId?: number;
+  /** Persisted coaching framework for this focus */
+  coachingApproach?: OpenaiConversationInputCoachingApproach;
   /** rebt or cbt — determines coach framework */
   modality?: string;
 }
+
+/**
+ * Explicit framework; supports legacy conversations without a persisted value
+ */
+export type OpenaiMessageInputCoachingApproach = typeof OpenaiMessageInputCoachingApproach[keyof typeof OpenaiMessageInputCoachingApproach];
+
+
+export const OpenaiMessageInputCoachingApproach = {
+  team_cbt: 'team_cbt',
+  beck_cbt: 'beck_cbt',
+  rebt: 'rebt',
+} as const;
 
 export interface OpenaiMessageInput {
   content: string;
@@ -228,13 +321,26 @@ export interface OpenaiMessageInput {
   modality?: string;
   /** Optional context from a completed exercise to anchor the coaching */
   exerciseContext?: string;
+  /** Explicit framework; supports legacy conversations without a persisted value */
+  coachingApproach?: OpenaiMessageInputCoachingApproach;
 }
+
+export type OpenaiConversationWithMessagesCoachingApproach = typeof OpenaiConversationWithMessagesCoachingApproach[keyof typeof OpenaiConversationWithMessagesCoachingApproach] | null;
+
+
+export const OpenaiConversationWithMessagesCoachingApproach = {
+  team_cbt: 'team_cbt',
+  beck_cbt: 'beck_cbt',
+  rebt: 'rebt',
+} as const;
 
 export interface OpenaiConversationWithMessages {
   id: number;
   title: string;
   selectedBeliefId?: number | null;
   selectedAutomaticThoughtId?: number | null;
+  selectedIntermediateBeliefId?: number | null;
+  coachingApproach: OpenaiConversationWithMessagesCoachingApproach;
   createdAt: string;
   messages: OpenaiMessage[];
 }

@@ -1,5 +1,14 @@
 import { Router } from "express";
-import { db, conversations as convTable, messages as msgTable, beliefsTable, automaticThoughtsTable, exerciseSessions, exercisesTable } from "@workspace/db";
+import {
+  db,
+  conversations as convTable,
+  messages as msgTable,
+  beliefsTable,
+  automaticThoughtsTable,
+  intermediateBeliefsCogTable,
+  exerciseSessions,
+  exercisesTable,
+} from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { veraComplete } from "@workspace/integrations-openai-ai-server";
 import {
@@ -7,6 +16,11 @@ import {
   SendOpenaiMessageBody,
 } from "@workspace/api-zod";
 import { buildConversationFocusBlock } from "./conversation-focus";
+import {
+  exerciseModalityForApproach,
+  getCoachingSystemPrompt,
+  normalizeCoachingApproach,
+} from "./coaching-prompts";
 
 const router = Router();
 
@@ -20,6 +34,13 @@ const EXERCISE_KEYWORD_MAP: { id: string; title: string; keywords: string[]; tar
   { id: 'rebt-rational-cards',  title: 'Rational Coping Cards',     keywords: ['rational coping cards', 'coping cards'],                                         targetProcesses: ['demandingness', 'awfulizing', 'low_frustration_tolerance', 'global_rating'] },
   { id: 'cbt-thought-record-7col', title: '7-Column Thought Record',keywords: ['7-column thought record', '7 column thought record', 'thought record'],          targetProcesses: ['automatic_thoughts', 'cognitive_distortions', 'hot_thought'] },
   { id: 'cbt-triple-column',    title: 'Triple Column Technique',   keywords: ['triple column technique', 'triple column'],                                      targetProcesses: ['automatic_thoughts', 'cognitive_distortions'] },
+  { id: 'cbt-quick-examine-evidence', title: 'Examine the Evidence', keywords: ['examine the evidence'], targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'overgeneralization', 'mental_filter'] },
+  { id: 'cbt-quick-distortions', title: 'Identify & Explain Distortions', keywords: ['identify and explain distortions', 'identify & explain distortions'], targetProcesses: ['automatic_thoughts', 'cognitive_distortions'] },
+  { id: 'cbt-quick-be-specific', title: 'Be Specific', keywords: ['be specific'], targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'overgeneralization', 'labeling'] },
+  { id: 'cbt-quick-shades-of-gray', title: 'Thinking in Shades of Gray', keywords: ['thinking in shades of gray', 'shades of gray', 'shades of grey'], targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'all_or_nothing'] },
+  { id: 'cbt-quick-define-terms', title: 'Define Terms', keywords: ['define terms', 'semantic method'], targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'labeling', 'global_rating'] },
+  { id: 'cbt-quick-double-standard', title: 'Double-Standard Technique', keywords: ['double-standard technique', 'double standard technique'], targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'global_rating'] },
+  { id: 'cbt-quick-cost-benefit', title: 'Cost-Benefit Analysis', keywords: ['cost-benefit analysis', 'cost benefit analysis'], targetProcesses: ['intermediate_beliefs', 'demandingness', 'should_statements'] },
   { id: 'cbt-downward-arrow',   title: 'Downward Arrow',            keywords: ['downward arrow'],                                                                 targetProcesses: ['intermediate_beliefs', 'core_beliefs'] },
   { id: 'cbt-behavioral-experiment', title: 'Behavioral Experiment',keywords: ['behavioral experiment', 'behavioural experiment'],                               targetProcesses: ['automatic_thoughts', 'intermediate_beliefs', 'safety_behaviours'] },
   { id: 'beh-activation',       title: 'Behavioral Activation',     keywords: ['behavioral activation', 'behavioural activation'],                               targetProcesses: ['avoidance', 'withdrawal', 'anhedonia'] },
@@ -90,95 +111,8 @@ function detectRecommendedExercise(
   return null;
 }
 
-// ─────────────────────────────────────────────────────────────
-// REBT system prompt — Ellis's ABC(DE) model
-// ─────────────────────────────────────────────────────────────
-const SAFETY_BOUNDARIES = `**Hard boundaries:**
-- You are a self-help coaching assistant, not a therapist, clinician, or crisis service. Do not diagnose, prescribe, or claim to treat mental health conditions.
-- If the user expresses suicidal thoughts, self-harm, intent to harm others, or an acute crisis, do not dispute beliefs or recommend exercises. Respond briefly and warmly, encourage immediate contact with local emergency services or a crisis line (US/Canada: call or text 988; UK/Ireland: Samaritans 116 123; elsewhere: https://www.iasp.info/suicidalthoughts/), and resume skills work only after they are safe.
-- Never pressure the user to complete an exercise, remain in an exposure, or perform a shame-attacking task. Offer choices and respect refusal.
-- Use tentative language such as "possible pattern", "hypothesis", and "you might explore". Never promise an outcome.`;
-
-const REBT_SYSTEM_PROMPT = `You are a bounded self-help REBT (Rational Emotive Behavior Therapy) guide informed by Albert Ellis's ABC(DE) model. You are not a person, therapist, or licensed clinician.
-
-**Your coaching framework — REBT (self-help):**
-- The ABC(DE) model: A (Activating event) → B (Irrational Belief) → C (Emotional/behavioural Consequence) → D (Disputing) → E (Effective new philosophy)
-- Distress is caused by B, not A. The goal is to change the beliefs, not the situation.
-- Four irrational-belief processes you watch for:
-  1. **Demandingness** — rigid musts/shoulds/have-tos (the root of most distress)
-  2. **Awfulizing** — rating things as more than 100% bad ("this is terrible/awful")
-  3. **Low Frustration Tolerance** — "I can't stand this", "This is unbearable"
-  4. **Global Rating / Self-downing** — damning the entire self or others from one event
-
-**Your disputation approach (three types):**
-- **Empirical:** "Where is the evidence this is true? Is there a law of the universe requiring this?"
-- **Logical:** "Does it follow logically that one mistake makes you a complete failure?"
-- **Pragmatic:** "Is this belief helping you achieve your goals? What are its costs?"
-
-**Your goals:**
-- Guide toward unconditional self-acceptance (USA), unconditional other-acceptance (UOA), and unconditional life-acceptance (ULA)
-- Suggest rational alternatives that are flexible, preferential ("I would prefer…" not "I must…"), non-catastrophic, and accepting
-
-**Your style:**
-- Socratic questioning — don't lecture, ask questions that help insight emerge naturally
-- Concise, warm, direct, non-judgmental
-- 2–4 short paragraphs per response
-- You may recommend exercises: ABCDE worksheet, shame-attacking, rational-emotive imagery, rational coping cards
-
-**Exercises you can recommend:**
-- For demandingness/awfulizing → ABCDE Worksheet, Rational Cards
-- For shame/approval-seeking → Shame-Attacking Exercise
-- For fear/anxiety → Rational-Emotive Imagery
-- For behavioral change → Behavioral Activation, Exposure Hierarchy
-
-${SAFETY_BOUNDARIES}`;
-
-// ─────────────────────────────────────────────────────────────
-// CBT system prompt — Beck / Burns / Greenberger & Padesky
-// ─────────────────────────────────────────────────────────────
-const CBT_SYSTEM_PROMPT = `You are a bounded self-help CBT (Cognitive Behavioural Therapy) guide informed by Aaron Beck, David Burns, and Greenberger & Padesky. You are not a person, therapist, or licensed clinician.
-
-**Your coaching framework — Beckian CBT (self-help):**
-- Situation → Automatic Thoughts → Emotion/Behaviour, with underlying Intermediate Beliefs (rules, attitudes, assumptions) and Core Beliefs (schemas: helpless / unlovable / worthless)
-- Work collaboratively and empirically — beliefs are hypotheses to be tested, not facts
-
-**Common cognitive distortions you identify:**
-1. All-or-nothing thinking  2. Overgeneralisation  3. Mental filter
-4. Discounting the positive  5. Mind reading  6. Fortune telling
-7. Magnification/Catastrophising  8. Minimisation  9. Emotional reasoning
-10. Should statements  11. Labelling  12. Personalisation/Blame
-
-**Your techniques:**
-- **Socratic questioning / guided discovery** — gently question the evidence, not the person
-- **Thought records** — identify situation, automatic thoughts (find the HOT thought), evidence for/against, balanced thought, re-rate mood
-- **Downward arrow** — ask "what would that mean?" repeatedly to reach core beliefs
-- **Examine the evidence** — distinguish facts from interpretations
-- **Behavioural experiments** — test beliefs as hypotheses with real-world data
-- **Positive data log** — notice experiences that contradict negative core beliefs
-- **Cost-benefit analysis** — weigh the advantages and disadvantages of a belief
-
-**Your goals:**
-- Increase cognitive flexibility and develop more balanced, nuanced thinking
-- Build behavioural skills that test and update maladaptive beliefs
-- Work from surface automatic thoughts downward to intermediate and core beliefs over time
-
-**Your style:**
-- Collaborative, curious, empirical — "What is the evidence for that?"
-- Gradual and structured — pace the depth of exploration to the person's readiness
-- Warm, non-judgmental, 2–4 short paragraphs per response
-- You may recommend exercises: 7-column thought record, triple column, downward arrow, behavioral experiment
-
-**Exercises you can recommend:**
-- For automatic thoughts → 7-Column Thought Record, Triple Column
-- To reach core beliefs → Downward Arrow
-- To test beliefs → Behavioral Experiment
-- For low mood → Behavioral Activation
-- For anxiety → Exposure Hierarchy, Graded Exposure Session
-
-${SAFETY_BOUNDARIES}`;
-
 function getSystemPrompt(modality?: string): string {
-  return modality === "cbt" ? CBT_SYSTEM_PROMPT : REBT_SYSTEM_PROMPT;
+  return getCoachingSystemPrompt(modality);
 }
 
 // List conversations
@@ -204,11 +138,25 @@ router.post("/openai/conversations", async (req, res) => {
       return;
     }
 
-    const beliefId = parsed.data.beliefId;
-    const automaticThoughtId = parsed.data.automaticThoughtId;
-    const modality = parsed.data.modality ?? "rebt";
-    if (beliefId && automaticThoughtId) {
-      res.status(400).json({ error: "Choose either a belief or an automatic thought" });
+    const createInput = parsed.data as typeof parsed.data & {
+      intermediateBeliefId?: number;
+      coachingApproach?: string;
+    };
+    const beliefId = createInput.beliefId;
+    const automaticThoughtId = createInput.automaticThoughtId;
+    const intermediateBeliefId = createInput.intermediateBeliefId;
+    const approach = normalizeCoachingApproach(
+      createInput.coachingApproach ?? createInput.modality,
+    );
+    if (
+      [beliefId, automaticThoughtId, intermediateBeliefId].filter(
+        (value) => value != null,
+      ).length > 1
+    ) {
+      res.status(400).json({
+        error:
+          "Choose one focus: a belief, an automatic thought, or an intermediate belief",
+      });
       return;
     }
 
@@ -221,12 +169,46 @@ router.post("/openai/conversations", async (req, res) => {
           .from(automaticThoughtsTable)
           .where(eq(automaticThoughtsTable.id, automaticThoughtId))
       : [];
+    const [selectedIntermediateBelief] = intermediateBeliefId
+      ? await db
+          .select()
+          .from(intermediateBeliefsCogTable)
+          .where(eq(intermediateBeliefsCogTable.id, intermediateBeliefId))
+      : [];
     if (beliefId && !selectedBelief) {
       res.status(404).json({ error: "Selected belief not found" });
       return;
     }
     if (automaticThoughtId && !selectedThought) {
       res.status(404).json({ error: "Selected automatic thought not found" });
+      return;
+    }
+    if (intermediateBeliefId && !selectedIntermediateBelief) {
+      res.status(404).json({ error: "Selected intermediate belief not found" });
+      return;
+    }
+    if (selectedThought && selectedThought.reviewStatus !== "endorsed") {
+      res.status(409).json({
+        error: "Mark this automatic thought as yours before working on it",
+      });
+      return;
+    }
+    if (
+      selectedIntermediateBelief &&
+      selectedIntermediateBelief.status !== "active"
+    ) {
+      res.status(409).json({
+        error: "This intermediate belief has been dismissed",
+      });
+      return;
+    }
+    if (
+      selectedIntermediateBelief &&
+      selectedIntermediateBelief.reviewStatus !== "endorsed"
+    ) {
+      res.status(409).json({
+        error: "Mark this intermediate belief as ringing true before working on it",
+      });
       return;
     }
 
@@ -236,6 +218,8 @@ router.post("/openai/conversations", async (req, res) => {
         title: parsed.data.title,
         selectedBeliefId: beliefId ?? null,
         selectedAutomaticThoughtId: automaticThoughtId ?? null,
+        selectedIntermediateBeliefId: intermediateBeliefId ?? null,
+        coachingApproach: approach,
       })
       .returning();
 
@@ -252,18 +236,23 @@ router.post("/openai/conversations", async (req, res) => {
           .set({ conversationId: conv.id })
           .where(eq(beliefsTable.id, beliefId));
 
-        const isREBT = modality !== "cbt";
-        const openingContent = isREBT
+        const openingContent = approach === "rebt"
           ? `The selected focus is a possible **${selectedBelief.beliefType.replace(/_/g, " ")}** pattern: "${selectedBelief.beliefText}".
 
 ${selectedBelief.triggerSituation ? `It may come up when ${selectedBelief.triggerSituation}.` : ""}
 
 Use the **REBT model** to test it. What happened in one recent example (A), and what did you feel or do (C)?`
-          : `The selected focus is a possible **${selectedBelief.beliefType.replace(/_/g, " ")}** pattern: "${selectedBelief.beliefText}".
+          : approach === "team_cbt"
+            ? `The selected focus is a possible **${selectedBelief.beliefType.replace(/_/g, " ")}** pattern: "${selectedBelief.beliefText}".
 
 ${selectedBelief.triggerSituation ? `It may come up when ${selectedBelief.triggerSituation}.` : ""}
 
-Use a **CBT approach** to examine the evidence. What is one recent specific situation where this thought showed up?`;
+Before choosing a method, I want to understand what this belief does for you as well as what it costs. What would you most like to change about its effect on you?`
+            : `The selected focus is a possible **${selectedBelief.beliefType.replace(/_/g, " ")}** pattern: "${selectedBelief.beliefText}".
+
+${selectedBelief.triggerSituation ? `It may come up when ${selectedBelief.triggerSituation}.` : ""}
+
+Using **Beckian guided discovery**, what is one recent, specific situation where this belief was active, and how strongly did you believe it (0–100)?`;
 
         await db.insert(msgTable).values({
           conversationId: conv.id,
@@ -271,11 +260,42 @@ Use a **CBT approach** to examine the evidence. What is one recent specific situ
           content: openingContent,
         });
     } else if (automaticThoughtId && selectedThought) {
-      const openingContent = `The selected focus for this conversation is the suspected automatic thought: "${selectedThought.thoughtText}".
+      const openingContent =
+        approach === "rebt"
+          ? `You marked this automatic thought as one you actually had: "${selectedThought.thoughtText}".
 
 ${selectedThought.situation ? `Possible situation: ${selectedThought.situation}.` : ""}
 
-Treat it as a hypothesis. What evidence supports this thought, and what evidence might not fit it?`;
+Using REBT, what rigid demand, awfulizing, frustration-intolerance, or global rating might sit inside this thought—and what emotion or action followed?`
+          : approach === "team_cbt"
+            ? `You marked this automatic thought as one you actually had: "${selectedThought.thoughtText}".
+
+${selectedThought.situation ? `Possible situation: ${selectedThought.situation}.` : ""}
+
+Before we pick a method, what feels most painful about this thought, and is there anything positive, protective, or understandable about believing it?`
+            : `You marked this automatic thought as one you actually had: "${selectedThought.thoughtText}".
+
+${selectedThought.situation ? `Possible situation: ${selectedThought.situation}.` : ""}
+
+Using Beckian guided discovery, how strongly did you believe it (0–100) in one recent specific moment, and what would you like to understand or change about it?`;
+      await db.insert(msgTable).values({
+        conversationId: conv.id,
+        role: "assistant",
+        content: openingContent,
+      });
+    } else if (intermediateBeliefId && selectedIntermediateBelief) {
+      const openingContent =
+        approach === "rebt"
+          ? `You marked this intermediate belief as one that rings true: "${selectedIntermediateBelief.beliefText}".
+
+We will still treat it as a hypothesis. In one recent activating event (A), what did this belief say had to happen—or must not happen—and what emotional or behavioral consequence (C) followed?`
+          : approach === "team_cbt"
+            ? `You marked this intermediate belief as one that rings true: "${selectedIntermediateBelief.beliefText}".
+
+Before choosing a Burns method, what would you most like to change about its impact—and what advantages or protection might this rule or assumption currently give you?`
+            : `You marked this intermediate belief as one that rings true: "${selectedIntermediateBelief.beliefText}".
+
+Using Beckian guided discovery, what is one recent specific situation where this rule or assumption was active, how strongly did you believe it (0–100), and what happened next?`;
       await db.insert(msgTable).values({
         conversationId: conv.id,
         role: "assistant",
@@ -396,6 +416,57 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       return;
     }
 
+    const [focusedThoughtRows, focusedIntermediateBeliefRows] =
+      await Promise.all([
+        conv.selectedAutomaticThoughtId
+          ? db
+              .select()
+              .from(automaticThoughtsTable)
+              .where(
+                eq(
+                  automaticThoughtsTable.id,
+                  conv.selectedAutomaticThoughtId,
+                ),
+              )
+          : Promise.resolve([]),
+        conv.selectedIntermediateBeliefId
+          ? db
+              .select()
+              .from(intermediateBeliefsCogTable)
+              .where(
+                eq(
+                  intermediateBeliefsCogTable.id,
+                  conv.selectedIntermediateBeliefId,
+                ),
+              )
+          : Promise.resolve([]),
+      ]);
+    const focusedThought = focusedThoughtRows[0];
+    const focusedIntermediateBelief = focusedIntermediateBeliefRows[0];
+
+    if (
+      conv.selectedAutomaticThoughtId &&
+      focusedThought?.reviewStatus !== "endorsed"
+    ) {
+      res.status(409).json({
+        error:
+          "This automatic thought is no longer marked as yours. Choose another endorsed focus to continue.",
+      });
+      return;
+    }
+
+    if (
+      conv.selectedIntermediateBeliefId &&
+      (focusedIntermediateBelief?.status !== "active" ||
+        focusedIntermediateBelief.reviewStatus !== "endorsed")
+    ) {
+      res.status(409).json({
+        error:
+          "This intermediate belief is no longer marked as ringing true. Choose another endorsed focus to continue.",
+      });
+      return;
+    }
+
     // Save user message
     await db.insert(msgTable).values({
       conversationId: id,
@@ -404,18 +475,28 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     });
 
     // Fetch full history + memory context in parallel
-    const modality = (parsed.data as { modality?: string }).modality ?? "rebt";
+    const requestedApproach = (
+      parsed.data as { modality?: string; coachingApproach?: string }
+    ).coachingApproach ?? (parsed.data as { modality?: string }).modality;
+    const approach = normalizeCoachingApproach(
+      conv.coachingApproach ?? requestedApproach,
+    );
     const exerciseContext = (parsed.data as { exerciseContext?: string }).exerciseContext;
 
-    const [history, allBeliefs, focusedThoughtRows, pastConvos, recentExercises, catalog] = await Promise.all([
+    const [
+      history,
+      allBeliefs,
+      allIntermediateBeliefs,
+      pastConvos,
+      recentExercises,
+      catalog,
+    ] = await Promise.all([
       db.select().from(msgTable).where(eq(msgTable.conversationId, id)).orderBy(msgTable.createdAt),
       db.select().from(beliefsTable).orderBy(desc(beliefsTable.createdAt)),
-      conv.selectedAutomaticThoughtId
-        ? db
-            .select()
-            .from(automaticThoughtsTable)
-            .where(eq(automaticThoughtsTable.id, conv.selectedAutomaticThoughtId))
-        : Promise.resolve([]),
+      db
+        .select()
+        .from(intermediateBeliefsCogTable)
+        .orderBy(desc(intermediateBeliefsCogTable.updatedAt)),
       db.select().from(msgTable)
         .where(eq(msgTable.role, "assistant"))
         .orderBy(desc(msgTable.createdAt))
@@ -431,13 +512,20 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     const focusedBelief = conv.selectedBeliefId
       ? allBeliefs.find((belief) => belief.id === conv.selectedBeliefId)
       : undefined;
-    const focusedThought = focusedThoughtRows[0];
-    const focusBlock = buildConversationFocusBlock(focusedBelief, focusedThought);
+    const focusBlock = buildConversationFocusBlock(
+      focusedBelief,
+      focusedThought,
+      focusedIntermediateBelief,
+    );
 
     // Build persistent memory block
     const activeBeliefs = allBeliefs.filter(b => b.status === "active");
     const challengedBeliefs = allBeliefs.filter(b => b.status === "challenged");
     const resolvedBeliefs = allBeliefs.filter(b => b.status === "resolved");
+    const endorsedIntermediateBeliefs = allIntermediateBeliefs.filter(
+      (belief) =>
+        belief.status === "active" && belief.reviewStatus === "endorsed",
+    );
 
     const beliefLines = [
       ...activeBeliefs.map(b =>
@@ -464,6 +552,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       if (s.stepData && typeof s.stepData === "object") {
         const data = s.stepData as Record<string, string | number>;
         for (const [key, value] of Object.entries(data)) {
+          if (key.startsWith("__")) continue;
           if (typeof value === "string" && value.trim().length > 0) {
             // Prefer the exercise definition's human step title; fall back to a
             // de-camelized key only when the step is unknown to the catalog.
@@ -492,6 +581,15 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
         ? `### Identified Beliefs (${allBeliefs.length} total)\n${beliefLines.join("\n")}`
         : "### No beliefs identified yet.",
       "",
+      endorsedIntermediateBeliefs.length > 0
+        ? `### User-endorsed intermediate-belief hypotheses\n${endorsedIntermediateBeliefs
+            .map(
+              (belief) =>
+                `  - ${belief.category}: "${belief.beliefText}" (model support ${belief.confidence}%)`,
+            )
+            .join("\n")}`
+        : "",
+      "",
       completedExerciseLines.length > 0
         ? `### Recently Completed Exercises\n${completedExerciseLines.join("\n")}`
         : "",
@@ -507,7 +605,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
       "Use this memory to track progress, reference past breakthroughs, and avoid repeating ground already covered. If a belief is marked RESOLVED, acknowledge the progress warmly.",
     ].filter(Boolean).join("\n");
 
-    const basePrompt = getSystemPrompt(modality);
+    const basePrompt = getSystemPrompt(approach);
     const systemPromptWithMemory = `${basePrompt}\n\n${memoryBlock}`;
 
     const chatMessages = history.map((m) => ({
@@ -545,18 +643,39 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     // filter exercise recommendations to only contextually appropriate ones.
     const activeProcesses = [
       ...new Set(
-        activeBeliefs.flatMap(b => BELIEF_TYPE_TO_PROCESSES[b.beliefType] ?? [])
+        [
+          ...activeBeliefs.flatMap(
+            (belief) =>
+              BELIEF_TYPE_TO_PROCESSES[belief.beliefType] ?? [],
+          ),
+          ...endorsedIntermediateBeliefs.flatMap((belief) => [
+            "intermediate_beliefs",
+            belief.category,
+          ]),
+          ...(focusedThought?.distortionTags ?? []).flatMap(
+            (tag) =>
+              BELIEF_TYPE_TO_PROCESSES[tag] ?? [
+                "automatic_thoughts",
+                "cognitive_distortions",
+              ],
+          ),
+        ],
       ),
     ];
 
     // Only surface exercises that exist in the catalog AND match the active
     // modality ("both" always qualifies). An unseeded catalog disables the
     // filter rather than silencing recommendations entirely.
+    const exerciseModality = exerciseModalityForApproach(approach);
     const allowedIds =
       catalog.length > 0
         ? new Set(
             catalog
-              .filter((e) => e.modality === modality || e.modality === "both")
+              .filter(
+                (exercise) =>
+                  exercise.modality === exerciseModality ||
+                  exercise.modality === "both",
+              )
               .map((e) => e.id),
           )
         : null;

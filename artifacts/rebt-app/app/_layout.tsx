@@ -71,6 +71,12 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="work/[kind]/[id]"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="exercise-history/[sessionId]"
         options={{ headerShown: false }}
       />

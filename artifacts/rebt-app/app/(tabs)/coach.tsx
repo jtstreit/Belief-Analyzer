@@ -101,7 +101,7 @@ export default function CoachScreen() {
         <Text style={[styles.contextText, { color: colors.mutedForeground }]}>
           {modality === 'rebt'
             ? 'A bounded REBT guide uses the ABC(DE) model for empirical, logical, and pragmatic disputation, then asks for a concrete next action.'
-            : 'A bounded CBT guide uses Socratic questions and thought records to examine evidence, then asks for a concrete next action.'}
+            : 'A bounded CBT guide uses Socratic discovery and a broader method library—specificity, continua, semantic work, cost-benefit analysis, experiments, and thought records when they fit.'}
         </Text>
       </View>
 
@@ -123,8 +123,16 @@ export default function CoachScreen() {
             <ConversationCard
               item={item}
               index={index}
-              activeColor={activeColor}
-              onPress={() => router.push(`/coach-session/${item.id}?modality=${modality}`)}
+              activeColor={
+                (item.coachingApproach ?? modality) === 'rebt'
+                  ? colors.accent
+                  : colors.cbt
+              }
+              onPress={() =>
+                router.push(
+                  `/coach-session/${item.id}?modality=${item.coachingApproach ?? modality}`,
+                )
+              }
             />
           )}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}

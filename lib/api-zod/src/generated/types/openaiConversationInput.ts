@@ -5,11 +5,15 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OpenaiConversationInputCoachingApproach } from './openaiConversationInputCoachingApproach';
 
 export interface OpenaiConversationInput {
   title: string;
   beliefId?: number;
   automaticThoughtId?: number;
+  intermediateBeliefId?: number;
+  /** Persisted coaching framework for this focus */
+  coachingApproach?: OpenaiConversationInputCoachingApproach;
   /** rebt or cbt — determines coach framework */
   modality?: string;
 }

@@ -260,6 +260,8 @@ export const AnalyzeCognitiveResponse = zod.object({
   "intensityPct": zod.number().nullish(),
   "distortionTags": zod.array(zod.string()),
   "telemetryEventId": zod.number().nullish(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date()
 })),
   "intermediateBeliefs": zod.array(zod.object({
@@ -268,6 +270,10 @@ export const AnalyzeCognitiveResponse = zod.object({
   "category": zod.string(),
   "confidence": zod.number(),
   "evidenceCount": zod.number(),
+  "status": zod.enum(['active', 'dismissed']),
+  "dismissedAt": zod.coerce.date().nullable(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -297,6 +303,8 @@ export const GetCognitiveMapResponse = zod.object({
   "intensityPct": zod.number().nullish(),
   "distortionTags": zod.array(zod.string()),
   "telemetryEventId": zod.number().nullish(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date()
 })),
   "intermediateBeliefs": zod.array(zod.object({
@@ -305,6 +313,10 @@ export const GetCognitiveMapResponse = zod.object({
   "category": zod.string(),
   "confidence": zod.number(),
   "evidenceCount": zod.number(),
+  "status": zod.enum(['active', 'dismissed']),
+  "dismissedAt": zod.coerce.date().nullable(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -339,9 +351,36 @@ export const ListAutomaticThoughtsResponseItem = zod.object({
   "intensityPct": zod.number().nullish(),
   "distortionTags": zod.array(zod.string()),
   "telemetryEventId": zod.number().nullish(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date()
 })
 export const ListAutomaticThoughtsResponse = zod.array(ListAutomaticThoughtsResponseItem)
+
+
+/**
+ * @summary Save or revise the user's review of an automatic-thought suggestion
+ */
+export const ReviewAutomaticThoughtParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReviewAutomaticThoughtBody = zod.object({
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant'])
+})
+
+export const ReviewAutomaticThoughtResponse = zod.object({
+  "id": zod.number(),
+  "situation": zod.string().nullish(),
+  "thoughtText": zod.string(),
+  "emotion": zod.string().nullish(),
+  "intensityPct": zod.number().nullish(),
+  "distortionTags": zod.array(zod.string()),
+  "telemetryEventId": zod.number().nullish(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**
@@ -353,6 +392,10 @@ export const ListIntermediateBeliefsResponseItem = zod.object({
   "category": zod.string(),
   "confidence": zod.number(),
   "evidenceCount": zod.number(),
+  "status": zod.enum(['active', 'dismissed']),
+  "dismissedAt": zod.coerce.date().nullable(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -372,6 +415,32 @@ export const ListCoreSchemasResponseItem = zod.object({
   "updatedAt": zod.coerce.date()
 })
 export const ListCoreSchemasResponse = zod.array(ListCoreSchemasResponseItem)
+
+
+/**
+ * @summary Save or revise the user's review of an intermediate-belief suggestion
+ */
+export const ReviewIntermediateBeliefParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReviewIntermediateBeliefBody = zod.object({
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant'])
+})
+
+export const ReviewIntermediateBeliefResponse = zod.object({
+  "id": zod.number(),
+  "beliefText": zod.string(),
+  "category": zod.string(),
+  "confidence": zod.number(),
+  "evidenceCount": zod.number(),
+  "status": zod.enum(['active', 'dismissed']),
+  "dismissedAt": zod.coerce.date().nullable(),
+  "reviewStatus": zod.enum(['unreviewed', 'endorsed', 'rejected', 'irrelevant']),
+  "reviewedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
 
 
 /**
@@ -402,6 +471,8 @@ export const ListOpenaiConversationsResponseItem = zod.object({
   "title": zod.string(),
   "selectedBeliefId": zod.number().nullish(),
   "selectedAutomaticThoughtId": zod.number().nullish(),
+  "selectedIntermediateBeliefId": zod.number().nullish(),
+  "coachingApproach": zod.enum(['team_cbt', 'beck_cbt', 'rebt']).nullable().describe('Persisted framework for new conversations; null on legacy rows'),
   "createdAt": zod.coerce.date()
 })
 export const ListOpenaiConversationsResponse = zod.array(ListOpenaiConversationsResponseItem)
@@ -414,6 +485,8 @@ export const CreateOpenaiConversationBody = zod.object({
   "title": zod.string(),
   "beliefId": zod.number().optional(),
   "automaticThoughtId": zod.number().optional(),
+  "intermediateBeliefId": zod.number().optional(),
+  "coachingApproach": zod.enum(['team_cbt', 'beck_cbt', 'rebt']).optional().describe('Persisted coaching framework for this focus'),
   "modality": zod.string().optional().describe('rebt or cbt — determines coach framework')
 })
 
@@ -422,6 +495,8 @@ export const CreateOpenaiConversationResponse = zod.object({
   "title": zod.string(),
   "selectedBeliefId": zod.number().nullish(),
   "selectedAutomaticThoughtId": zod.number().nullish(),
+  "selectedIntermediateBeliefId": zod.number().nullish(),
+  "coachingApproach": zod.enum(['team_cbt', 'beck_cbt', 'rebt']).nullable().describe('Persisted framework for new conversations; null on legacy rows'),
   "createdAt": zod.coerce.date()
 })
 
@@ -438,6 +513,8 @@ export const GetOpenaiConversationResponse = zod.object({
   "title": zod.string(),
   "selectedBeliefId": zod.number().nullish(),
   "selectedAutomaticThoughtId": zod.number().nullish(),
+  "selectedIntermediateBeliefId": zod.number().nullish(),
+  "coachingApproach": zod.enum(['team_cbt', 'beck_cbt', 'rebt']).nullable(),
   "createdAt": zod.coerce.date(),
   "messages": zod.array(zod.object({
   "id": zod.number(),
@@ -486,7 +563,8 @@ export const SendOpenaiMessageParams = zod.object({
 export const SendOpenaiMessageBody = zod.object({
   "content": zod.string(),
   "modality": zod.string().optional().describe('rebt or cbt — selects coach system prompt'),
-  "exerciseContext": zod.string().optional().describe('Optional context from a completed exercise to anchor the coaching')
+  "exerciseContext": zod.string().optional().describe('Optional context from a completed exercise to anchor the coaching'),
+  "coachingApproach": zod.enum(['team_cbt', 'beck_cbt', 'rebt']).optional().describe('Explicit framework; supports legacy conversations without a persisted value')
 })
 
 export const SendOpenaiMessageResponse = zod.unknown()

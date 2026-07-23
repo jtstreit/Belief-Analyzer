@@ -106,9 +106,10 @@ methods by fit rather than pretending one worksheet is the default.
 
 ### 5. Carry the selected focus into exercises
 
-- Pass a focus kind, focus id, and focus text from the workbench to the exercise
-  runner.
-- Prefill the exercise's target-thought or target-belief step.
+- Pass only a focus kind and focus id through navigation; never place raw
+  thought or belief text in a URL.
+- Resolve the current endorsed item from the cognitive map and prefill the
+  exercise's target-thought or target-belief step.
 - Save that prefill in `exercise_sessions.step_data` at session creation so the
   completed exercise remains tied to the selected item without a second
   conversation.
@@ -133,6 +134,8 @@ methods by fit rather than pretending one worksheet is the default.
 - Update the OpenAPI source, regenerate API Zod/client code, and keep generated
   files in the same commit as the contract change.
 - Use additive database fields with defaults so existing rows continue to load.
+- Leave the new conversation approach nullable for legacy rows, while requiring
+  every newly created conversation to persist its selected framework.
 - Update the bundled exercise catalog and the database seed catalog together so
   online and offline behavior match.
 - The repository currently uses `drizzle-kit push` rather than checked-in SQL
@@ -151,6 +154,7 @@ methods by fit rather than pretending one worksheet is the default.
   - `pnpm --filter @workspace/api-spec run codegen`
   - `pnpm run typecheck`
   - `pnpm --filter @workspace/api-server run test`
+  - `pnpm --filter @workspace/rebt-app run test`
   - `pnpm run build`
 - Exercise the mobile/web flow with one endorsed and one rejected automatic
   thought plus one endorsed intermediate belief. Confirm the rejected thought is
@@ -160,10 +164,9 @@ methods by fit rather than pretending one worksheet is the default.
 ## Delivery sequence
 
 - [x] Record this plan in the repository before implementation.
-- [ ] Add review-state persistence and API contracts.
-- [ ] Add review controls and workbench navigation.
-- [ ] Add intermediate-belief conversation focus and three coaching approaches.
-- [ ] Add short Burns/CBT methods and focus-prefilled exercise sessions.
-- [ ] Regenerate clients, test, build, and exercise the flows.
+- [x] Add review-state persistence and API contracts.
+- [x] Add review controls and workbench navigation.
+- [x] Add intermediate-belief conversation focus and three coaching approaches.
+- [x] Add short Burns/CBT methods and focus-prefilled exercise sessions.
+- [x] Regenerate clients, test, build, and exercise the flows.
 - [ ] Push the implementation branch and update the draft pull request.
-

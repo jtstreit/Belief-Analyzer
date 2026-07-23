@@ -111,7 +111,8 @@ export default function CoachSessionScreen() {
   const { modality: globalModality } = useModality();
   const modality = modalityParam ?? globalModality;
 
-  const activeColor = modality === 'cbt' ? colors.cbt : colors.accent;
+  const isCbtApproach = modality === 'cbt' || modality === 'beck_cbt' || modality === 'team_cbt';
+  const activeColor = isCbtApproach ? colors.cbt : colors.accent;
 
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
@@ -429,7 +430,13 @@ export default function CoachSessionScreen() {
           onChangeText={setInputText}
           onFocus={() => setIsInputFocused(true)}
           onBlur={() => setIsInputFocused(false)}
-          placeholder={modality === 'cbt' ? 'Share a situation or thought...' : 'Share what\'s on your mind...'}
+          placeholder={
+            modality === 'team_cbt'
+              ? 'Share what you want to change—and what makes sense about it...'
+              : isCbtApproach
+                ? 'Share a specific situation or thought...'
+                : 'Share what is on your mind...'
+          }
           placeholderTextColor={colors.mutedForeground}
           multiline
           maxLength={1000}

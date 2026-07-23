@@ -169,4 +169,4 @@ methods by fit rather than pretending one worksheet is the default.
 - [x] Add intermediate-belief conversation focus and three coaching approaches.
 - [x] Add short Burns/CBT methods and focus-prefilled exercise sessions.
 - [x] Regenerate clients, test, build, and exercise the flows.
-- [ ] Push the implementation branch and update the draft pull request.
+- [x] Push the implementation branch and update the draft pull request.

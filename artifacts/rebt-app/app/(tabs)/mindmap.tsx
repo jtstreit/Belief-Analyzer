@@ -21,7 +21,8 @@ import {
   getGetCognitiveMapQueryKey,
   useAnalyzeCognitive,
   useSyncSentinel,
-  useDismissIntermediateBelief,
+  useReviewAutomaticThought,
+  useReviewIntermediateBelief,
   useDismissCoreSchema,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,6 +66,8 @@ const DOMAIN_CONFIG: Record<
   worthless: { label: "Worthless", color: "#B94040", bg: "#FAEEEE" },
   other: { label: "Other", color: "#7B7266", bg: "#ECEEE9" },
 };
+
+type ReviewStatus = "unreviewed" | "endorsed" | "rejected" | "irrelevant";
 
 // ─── Confidence bar ────────────────────────────────────────────────────────
 function ConfidenceBar({
@@ -137,6 +140,102 @@ function LayerHeader({
 }
 
 // ─── Main screen ───────────────────────────────────────────────────────────
+function ReviewControls({
+  status,
+  positiveLabel,
+  negativeLabel,
+  onChange,
+  disabled,
+}: {
+  status: ReviewStatus;
+  positiveLabel: string;
+  negativeLabel: string;
+  onChange: (status: ReviewStatus) => void;
+  disabled: boolean;
+}) {
+  const colors = useColors();
+  const options: Array<{
+    status: ReviewStatus;
+    label: string;
+    icon: keyof typeof Feather.glyphMap;
+  }> = [
+    { status: "endorsed", label: positiveLabel, icon: "check" },
+    { status: "rejected", label: negativeLabel, icon: "x" },
+    { status: "irrelevant", label: "Irrelevant", icon: "minus-circle" },
+  ];
+
+  return (
+    <View style={styles.reviewBlock}>
+      <View style={styles.reviewHeading}>
+        <Text style={[styles.reviewPrompt, { color: colors.mutedForeground }]}>
+          Opus suggested this — does it fit?
+        </Text>
+        {status !== "unreviewed" ? (
+          <TouchableOpacity
+            onPress={() => onChange("unreviewed")}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel="Clear review"
+          >
+            <Text style={[styles.clearReview, { color: colors.primary }]}>
+              Change
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <View style={styles.reviewChoices}>
+        {options.map((option) => {
+          const selected = status === option.status;
+          const selectedColor =
+            option.status === "endorsed"
+              ? colors.primary
+              : option.status === "rejected"
+                ? colors.destructive
+                : colors.mutedForeground;
+          return (
+            <TouchableOpacity
+              key={option.status}
+              style={[
+                styles.reviewChoice,
+                {
+                  backgroundColor: selected
+                    ? `${selectedColor}1F`
+                    : colors.secondary,
+                  borderColor: selected ? selectedColor : colors.border,
+                  opacity: disabled ? 0.6 : 1,
+                },
+              ]}
+              onPress={() => onChange(option.status)}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={option.label}
+            >
+              <Feather
+                name={option.icon}
+                size={13}
+                color={selected ? selectedColor : colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  styles.reviewChoiceText,
+                  {
+                    color: selected
+                      ? selectedColor
+                      : colors.secondaryForeground,
+                  },
+                ]}
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export default function MindMapScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -178,9 +277,50 @@ export default function MindMapScreen() {
 
   const { mutateAsync: runAnalysis } = useAnalyzeCognitive();
   const { mutateAsync: syncLifeOps } = useSyncSentinel();
-  const dismissBelief = useDismissIntermediateBelief();
+  const reviewThought = useReviewAutomaticThought();
+  const reviewBelief = useReviewIntermediateBelief();
   const dismissSchema = useDismissCoreSchema();
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const handleReviewThought = useCallback(
+    async (id: number, reviewStatus: ReviewStatus) => {
+      try {
+        setAnalysisError(null);
+        await reviewThought.mutateAsync({
+          id,
+          data: { reviewStatus },
+        });
+        await queryClient.invalidateQueries({
+          queryKey: getGetCognitiveMapQueryKey(),
+        });
+      } catch {
+        setAnalysisError(
+          "Could not save your review of this thought. Check your connection and try again.",
+        );
+      }
+    },
+    [queryClient, reviewThought],
+  );
+
+  const handleReviewBelief = useCallback(
+    async (id: number, reviewStatus: ReviewStatus) => {
+      try {
+        setAnalysisError(null);
+        await reviewBelief.mutateAsync({
+          id,
+          data: { reviewStatus },
+        });
+        await queryClient.invalidateQueries({
+          queryKey: getGetCognitiveMapQueryKey(),
+        });
+      } catch {
+        setAnalysisError(
+          "Could not save your review of this belief. Check your connection and try again.",
+        );
+      }
+    },
+    [queryClient, reviewBelief],
+  );
 
   const handleAnalyze = useCallback(async () => {
     if (analysisLock.current) return;
@@ -207,22 +347,6 @@ export default function MindMapScreen() {
       setIsAnalyzing(false);
     }
   }, [queryClient, refetch, runAnalysis, syncLifeOps]);
-
-  const handleDismissBelief = useCallback(
-    async (id: number) => {
-      try {
-        await dismissBelief.mutateAsync({ id });
-        await queryClient.invalidateQueries({
-          queryKey: getGetCognitiveMapQueryKey(),
-        });
-      } catch {
-        setAnalysisError(
-          "Could not dismiss the belief. Check your connection and try again.",
-        );
-      }
-    },
-    [dismissBelief, queryClient],
-  );
 
   const handleDismissSchema = useCallback(
     async (id: number) => {
@@ -501,6 +625,44 @@ export default function MindMapScreen() {
                           ))}
                       </View>
                     )}
+                    <ReviewControls
+                      status={(t.reviewStatus ?? "unreviewed") as ReviewStatus}
+                      positiveLabel="This is mine"
+                      negativeLabel="Not my thought"
+                      onChange={(reviewStatus) =>
+                        handleReviewThought(t.id, reviewStatus)
+                      }
+                      disabled={reviewThought.isPending}
+                    />
+                    {t.reviewStatus === "endorsed" ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.workThoughtButton,
+                          { backgroundColor: colors.primary },
+                        ]}
+                        onPress={() =>
+                          router.push(
+                            `/work/automatic-thought/${t.id}` as never,
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel="Choose how to work this thought"
+                      >
+                        <Feather
+                          name="arrow-right-circle"
+                          size={15}
+                          color={colors.primaryForeground}
+                        />
+                        <Text
+                          style={[
+                            styles.workThoughtText,
+                            { color: colors.primaryForeground },
+                          ]}
+                        >
+                          Choose a method
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 ))
               )}
@@ -615,17 +777,25 @@ export default function MindMapScreen() {
                           {b.category}
                         </Text>
                       </View>
-                      <TouchableOpacity
-                        onPress={() => handleDismissBelief(b.id)}
-                        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-                        accessibilityLabel="Dismiss belief"
+                      <Text
+                        style={[
+                          styles.reviewStateLabel,
+                          {
+                            color:
+                              b.reviewStatus === "endorsed"
+                                ? colors.primary
+                                : colors.mutedForeground,
+                          },
+                        ]}
                       >
-                        <Feather
-                          name="x"
-                          size={15}
-                          color={colors.mutedForeground}
-                        />
-                      </TouchableOpacity>
+                        {b.reviewStatus === "endorsed"
+                          ? "RINGS TRUE"
+                          : b.reviewStatus === "rejected"
+                            ? "DOESN'T FIT"
+                            : b.reviewStatus === "irrelevant"
+                              ? "IRRELEVANT"
+                              : "UNREVIEWED"}
+                      </Text>
                     </View>
                     <Text
                       style={[
@@ -639,6 +809,44 @@ export default function MindMapScreen() {
                       pct={b.confidence}
                       evidenceCount={b.evidenceCount}
                     />
+                    <ReviewControls
+                      status={(b.reviewStatus ?? "unreviewed") as ReviewStatus}
+                      positiveLabel="Rings true"
+                      negativeLabel="Doesn't fit"
+                      onChange={(reviewStatus) =>
+                        handleReviewBelief(b.id, reviewStatus)
+                      }
+                      disabled={reviewBelief.isPending}
+                    />
+                    {b.reviewStatus === "endorsed" ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.workThoughtButton,
+                          { backgroundColor: colors.primary },
+                        ]}
+                        onPress={() =>
+                          router.push(
+                            `/work/intermediate-belief/${b.id}` as never,
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel="Choose how to work this intermediate belief"
+                      >
+                        <Feather
+                          name="arrow-right-circle"
+                          size={15}
+                          color={colors.primaryForeground}
+                        />
+                        <Text
+                          style={[
+                            styles.workThoughtText,
+                            { color: colors.primaryForeground },
+                          ]}
+                        >
+                          Choose a method
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 ))
               )}
@@ -827,6 +1035,44 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   tagText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  workThoughtButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  workThoughtText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  reviewBlock: { gap: 8, marginTop: 2 },
+  reviewHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  reviewPrompt: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  clearReview: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  reviewChoices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  reviewChoice: {
+    minHeight: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  reviewChoiceText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  reviewStateLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.6,
+  },
 
   // Distortion aggregate
   distGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

@@ -184,7 +184,7 @@ export default function BeliefDetailScreen() {
               <>
                 <Feather name="message-circle" size={20} color={colors.primaryForeground} />
                 <Text style={[styles.challengeBtnText, { color: colors.primaryForeground }]}>
-                   {belief.conversationId ? 'Continue Session' : 'Work on this with Vera'}
+                   {belief.conversationId ? 'Continue Session' : 'Work this belief'}
                 </Text>
               </>
             )}

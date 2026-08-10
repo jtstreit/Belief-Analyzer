@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   StyleSheet, Text, View, ScrollView, TextInput,
   TouchableOpacity, ActivityIndicator, Alert, BackHandler,
@@ -14,7 +14,14 @@ import Animated, {
 import { useModality } from '@/contexts/ModalityContext';
 import { type ExerciseStep } from '@/constants/exercises';
 import { useExerciseById } from '@/hooks/useExerciseCatalog';
-import { useCreateExerciseSession, useUpdateExerciseSession, useCreateOpenaiConversation } from '@workspace/api-client-react';
+import { buildExerciseFocusPrefill, isQuickExercise } from '@/lib/exerciseFocus';
+import {
+  getGetCognitiveMapQueryKey,
+  useCreateExerciseSession,
+  useCreateOpenaiConversation,
+  useGetCognitiveMap,
+  useUpdateExerciseSession,
+} from '@workspace/api-client-react';
 
 // ─── Step input components ────────────────────────────────────────────────────
 
@@ -151,10 +158,18 @@ function SudsStep({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ExerciseScreen() {
-  const { exerciseId, returnConvId, returnModality } = useLocalSearchParams<{
+  const {
+    exerciseId,
+    returnConvId,
+    returnModality,
+    focusKind,
+    focusId,
+  } = useLocalSearchParams<{
     exerciseId: string;
     returnConvId?: string;
     returnModality?: string;
+    focusKind?: string;
+    focusId?: string;
   }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -162,6 +177,45 @@ export default function ExerciseScreen() {
   const { modality } = useModality();
 
   const { exercise, isLoading: catalogLoading } = useExerciseById(exerciseId);
+  const numericFocusId = Number.parseInt(focusId ?? '', 10);
+  const hasFocusParams = focusKind !== undefined || focusId !== undefined;
+  const validFocusPointer =
+    Number.isSafeInteger(numericFocusId) &&
+    numericFocusId > 0 &&
+    (focusKind === 'automatic_thought' ||
+      focusKind === 'intermediate_belief');
+  const {
+    data: cognitiveMap,
+    isLoading: focusLoading,
+    isError: focusError,
+  } = useGetCognitiveMap({
+    query: {
+      queryKey: getGetCognitiveMapQueryKey(),
+      enabled: validFocusPointer,
+    },
+  });
+  const selectedFocus = useMemo(() => {
+    if (!validFocusPointer || !cognitiveMap) return undefined;
+    return focusKind === 'automatic_thought'
+      ? cognitiveMap.automaticThoughts.find(
+          (item) => item.id === numericFocusId,
+        )
+      : cognitiveMap.intermediateBeliefs.find(
+          (item) => item.id === numericFocusId,
+        );
+  }, [cognitiveMap, focusKind, numericFocusId, validFocusPointer]);
+  const resolvedFocusText =
+    selectedFocus && 'thoughtText' in selectedFocus
+      ? selectedFocus.thoughtText
+      : selectedFocus?.beliefText;
+  const focusPrefill = useMemo(
+    () => buildExerciseFocusPrefill(exerciseId, {
+      kind: focusKind,
+      id: focusId,
+      text: resolvedFocusText,
+    }),
+    [exerciseId, focusId, focusKind, resolvedFocusText],
+  );
 
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | number>>({});
@@ -178,7 +232,12 @@ export default function ExerciseScreen() {
   const updateSession = useUpdateExerciseSession();
   const createConversation = useCreateOpenaiConversation();
 
-  const activeColor = modality === 'rebt' ? colors.accent : colors.cbt;
+  const defaultActiveColor = modality === 'rebt' ? colors.accent : colors.cbt;
+
+  useEffect(() => {
+    if (Object.keys(focusPrefill).length === 0) return;
+    setAnswers((current) => ({ ...focusPrefill, ...current }));
+  }, [focusPrefill]);
 
   const setAnswer = useCallback((stepId: string, val: string | number) => {
     setAnswers(prev => ({ ...prev, [stepId]: val }));
@@ -208,7 +267,7 @@ export default function ExerciseScreen() {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         {catalogLoading ? (
-          <ActivityIndicator color={activeColor} />
+          <ActivityIndicator color={defaultActiveColor} />
         ) : (
           <Text style={{ color: colors.foreground }}>Exercise not found.</Text>
         )}
@@ -216,10 +275,68 @@ export default function ExerciseScreen() {
     );
   }
 
+  if (
+    hasFocusParams &&
+    (focusError ||
+      !validFocusPointer ||
+      (!focusLoading &&
+        (!selectedFocus || selectedFocus.reviewStatus !== 'endorsed')))
+  ) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Feather name="alert-circle" size={28} color={colors.destructive} />
+        <Text style={{ color: colors.foreground, textAlign: 'center' }}>
+          This insight is no longer marked as yours. Return to Belief Insights
+          and choose an endorsed focus.
+        </Text>
+        <TouchableOpacity
+          style={[styles.primaryBtn, { backgroundColor: defaultActiveColor }]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.primaryBtnText}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (validFocusPointer && (focusLoading || !resolvedFocusText)) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={defaultActiveColor} />
+      </View>
+    );
+  }
+
+  const sessionModality = exercise.modality === 'both' ? modality : exercise.modality;
+  const activeColor = sessionModality === 'rebt' ? colors.accent : colors.cbt;
+  const quick = isQuickExercise(exercise);
   const steps = exercise.steps;
   const currentStep = steps[stepIndex];
   const progress = (stepIndex + 1) / steps.length;
   const isLast = stepIndex === steps.length - 1;
+
+  const handleStartExercise = async () => {
+    try {
+      const initialStepData = { ...focusPrefill, ...answers };
+      const hasInitialStepData = Object.keys(initialStepData).length > 0;
+      const s = await createSession.mutateAsync({
+        data: {
+          exerciseId: exercise.id,
+          modality: sessionModality,
+          ...(quick ? {} : { moodBefore: moodBefore! }),
+          ...(hasInitialStepData ? { stepData: initialStepData } : {}),
+          completed: false,
+        },
+      });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setAnswers(initialStepData);
+      setSessionId(s.id);
+      setShowMoodBefore(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Could not start exercise', 'Check your connection and try again.');
+    }
+  };
 
   // ── Mood before gate ────────────────────────────────────────────────────────
   if (showMoodBefore) {
@@ -230,7 +347,7 @@ export default function ExerciseScreen() {
             <Feather name="x" size={20} color={colors.mutedForeground} />
           </TouchableOpacity>
           <View style={[styles.modalityPill, { backgroundColor: activeColor + '22', borderColor: activeColor + '55' }]}>
-            <Text style={[styles.modalityPillText, { color: activeColor }]}>{modality.toUpperCase()}</Text>
+            <Text style={[styles.modalityPillText, { color: activeColor }]}>{sessionModality.toUpperCase()}</Text>
           </View>
         </View>
         <ScrollView contentContainerStyle={[styles.gateContent, { paddingBottom: insets.bottom + 32 }]}>
@@ -250,38 +367,38 @@ export default function ExerciseScreen() {
                 <Text style={[styles.cautionText, { color: colors.foreground }]}>{exercise.caution}</Text>
               </View>
             )}
-            <Text style={[styles.moodGateLabel, { color: colors.foreground }]}>
-              How are you feeling right now? (0–10)
-            </Text>
-            <RatingStep
-              step={{ id: 'mood', title: '', instruction: '', type: 'mood', min: 0, max: 10 }}
-              value={moodBefore}
-              onChange={setMoodBefore}
-              colors={colors}
-              activeColor={activeColor}
-            />
+            {!quick && (
+              <>
+                <Text style={[styles.moodGateLabel, { color: colors.foreground }]}>
+                  How are you feeling right now? (0–10)
+                </Text>
+                <RatingStep
+                  step={{ id: 'mood', title: '', instruction: '', type: 'mood', min: 0, max: 10 }}
+                  value={moodBefore}
+                  onChange={setMoodBefore}
+                  colors={colors}
+                  activeColor={activeColor}
+                />
+              </>
+            )}
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: moodBefore !== null ? activeColor : colors.muted }]}
-              disabled={moodBefore === null || createSession.isPending}
-              onPress={async () => {
-                try {
-                  const s = await createSession.mutateAsync({
-                    data: { exerciseId: exercise.id, modality, moodBefore: moodBefore!, completed: false },
-                  });
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setSessionId(s.id);
-                  setShowMoodBefore(false);
-                } catch {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  Alert.alert('Could not start exercise', 'Check your connection and try again.');
-                }
-              }}
+              style={[
+                styles.primaryBtn,
+                { backgroundColor: quick || moodBefore !== null ? activeColor : colors.muted },
+              ]}
+              disabled={(!quick && moodBefore === null) || createSession.isPending}
+              onPress={handleStartExercise}
             >
               {createSession.isPending ? (
                 <ActivityIndicator color="#000" />
               ) : (
-                <Text style={[styles.primaryBtnText, { color: moodBefore !== null ? '#000' : colors.mutedForeground }]}>
-                  Start — ~{exercise.estimatedMinutes} min
+                <Text
+                  style={[
+                    styles.primaryBtnText,
+                    { color: quick || moodBefore !== null ? '#000' : colors.mutedForeground },
+                  ]}
+                >
+                  {quick ? 'Start quick method' : 'Start'} — ~{exercise.estimatedMinutes} min
                 </Text>
               )}
             </TouchableOpacity>
@@ -318,7 +435,7 @@ export default function ExerciseScreen() {
         if (returnToCoach && returnConvId) {
           const ctx = encodeURIComponent(buildExerciseContext());
           router.replace(
-            `/coach-session/${returnConvId}?modality=${returnModality ?? modality}&exerciseContext=${ctx}` as any
+            `/coach-session/${returnConvId}?modality=${returnModality ?? sessionModality}&exerciseContext=${ctx}` as any
           );
         } else {
           router.back();
@@ -342,12 +459,12 @@ export default function ExerciseScreen() {
         const conv = await createConversation.mutateAsync({
           data: {
             title: `After ${exercise.title} — ${new Date().toLocaleDateString()}`,
-            modality,
+            modality: sessionModality,
           },
         });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         const ctx = encodeURIComponent(buildExerciseContext());
-        router.replace(`/coach-session/${conv.id}?modality=${modality}&exerciseContext=${ctx}` as any);
+        router.replace(`/coach-session/${conv.id}?modality=${sessionModality}&exerciseContext=${ctx}` as any);
       } catch {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert('Could not start coach session', 'Your exercise is saved. Check your connection and try again.');
@@ -370,26 +487,30 @@ export default function ExerciseScreen() {
             <Text style={[styles.exerciseSubtitle, { color: colors.mutedForeground }]}>
               Well done. Your responses have been saved.
             </Text>
-            <Text style={[styles.moodGateLabel, { color: colors.foreground }]}>
-              How are you feeling now? (0–10)
-            </Text>
-            <RatingStep
-              step={{ id: 'moodAfter', title: '', instruction: '', type: 'mood', min: 0, max: 10 }}
-              value={moodAfterVal}
-              onChange={setMoodAfterVal}
-              colors={colors}
-              activeColor={activeColor}
-            />
-            {moodBefore !== null && moodAfterVal !== null && (
-              <Animated.View
-                entering={FadeIn.duration(400)}
-                style={[styles.moodDelta, { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
-                <Text style={[styles.moodDeltaLabel, { color: colors.mutedForeground }]}>Mood shift</Text>
-                <Text style={[styles.moodDeltaValue, { color: moodAfterVal >= moodBefore ? '#10B981' : '#EF4444' }]}>
-                  {moodAfterVal >= moodBefore ? '+' : ''}{moodAfterVal - moodBefore} / 10
+            {!quick && (
+              <>
+                <Text style={[styles.moodGateLabel, { color: colors.foreground }]}>
+                  How are you feeling now? (0–10)
                 </Text>
-              </Animated.View>
+                <RatingStep
+                  step={{ id: 'moodAfter', title: '', instruction: '', type: 'mood', min: 0, max: 10 }}
+                  value={moodAfterVal}
+                  onChange={setMoodAfterVal}
+                  colors={colors}
+                  activeColor={activeColor}
+                />
+                {moodBefore !== null && moodAfterVal !== null && (
+                  <Animated.View
+                    entering={FadeIn.duration(400)}
+                    style={[styles.moodDelta, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.moodDeltaLabel, { color: colors.mutedForeground }]}>Mood shift</Text>
+                    <Text style={[styles.moodDeltaValue, { color: moodAfterVal >= moodBefore ? '#10B981' : '#EF4444' }]}>
+                      {moodAfterVal >= moodBefore ? '+' : ''}{moodAfterVal - moodBefore} / 10
+                    </Text>
+                  </Animated.View>
+                )}
+              </>
             )}
             {returnConvId ? (
               <>
@@ -516,7 +637,7 @@ export default function ExerciseScreen() {
           </Text>
         </View>
         <View style={[styles.modalityPill, { backgroundColor: activeColor + '22', borderColor: activeColor + '55' }]}>
-          <Text style={[styles.modalityPillText, { color: activeColor }]}>{modality.toUpperCase()}</Text>
+          <Text style={[styles.modalityPillText, { color: activeColor }]}>{sessionModality.toUpperCase()}</Text>
         </View>
       </View>
 

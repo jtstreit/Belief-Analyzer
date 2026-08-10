@@ -12,5 +12,11 @@ export async function ensureDatabaseSchema(): Promise<void> {
   await pool.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS telemetry_external_id_idx ON telemetry_events (external_id)",
   );
+  await pool.query(
+    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS selected_belief_id integer",
+  );
+  await pool.query(
+    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS selected_automatic_thought_id integer",
+  );
   logger.info("Database schema ready");
 }

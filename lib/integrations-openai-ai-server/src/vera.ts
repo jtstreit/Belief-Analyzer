@@ -1,17 +1,21 @@
-// Vera's LLM provider. Plan of record (Jackson, 2026-07-11): every Vera call runs on
-// Claude Opus 4.8 through the Claude Agent SDK with a Max-subscription OAuth token
-// (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`) — the zero-API-spend pattern
-// proven in CBT Sentinel. DeepSeek is removed; there is no default HTTP provider.
+// Vera's LLM provider. Plan of record (Jackson, 2026-08-09): every Vera call runs on
+// Kimi K3 through the Kimi Code OpenAI-compatible API using Jackson's Kimi
+// subscription OAuth (device-code login; KIMI_REFRESH_TOKEN refreshes short-lived
+// access tokens in-process) — the zero-API-spend subscription pattern that replaced
+// the retired Claude Max OAuth route. DeepSeek is removed; there is no default HTTP
+// provider.
 //
 // Backend selection:
 //   AI_INTEGRATIONS_OPENAI_BASE_URL set -> OpenAI-compatible endpoint. This is the
 //     local verification seam (mock LLM at :8090); requires OPENAI_API_KEY.
-//   otherwise -> Claude Agent SDK. The SDK is Node-only and spawns a native binary,
-//     which is why this lives in the server-only integrations package.
+//   KIMI_REFRESH_TOKEN set -> Kimi Code API (model `k3` by default).
+//   otherwise -> Claude Agent SDK (legacy path, kept for rollback). The SDK is
+//     Node-only and spawns a native binary, which is why this lives in the
+//     server-only integrations package.
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { getOpenAI } from "./client";
 
-export const DEFAULT_VERA_MODEL = "claude-opus-4-8";
+export const DEFAULT_VERA_MODEL = "k3";
 
 export type VeraMessage = {
   role: "system" | "user" | "assistant";
@@ -36,6 +40,202 @@ export interface VeraCompleteOptions {
 function veraModel(): string {
   return process.env.VERA_MODEL?.trim() || DEFAULT_VERA_MODEL;
 }
+
+// ---------------------------------------------------------------------------
+// Kimi Code backend (K3 on Jackson's Kimi subscription OAuth).
+//
+// The subscription login is an RFC 8628 device-code flow; its refresh token is
+// injected as KIMI_REFRESH_TOKEN. Access tokens live ~15 minutes, so we keep one
+// in-process and refresh ahead of expiry. The OAuth server rotates refresh tokens
+// on refresh but keeps accepting the previous one, so the static env var remains a
+// valid root of trust across restarts.
+// ---------------------------------------------------------------------------
+
+const KIMI_OAUTH_HOST =
+  process.env.KIMI_OAUTH_HOST?.trim() || "https://auth.kimi.com";
+const KIMI_CLIENT_ID =
+  process.env.KIMI_CLIENT_ID?.trim() || "17e5f671-d194-4dfb-9706-5516cb48c098";
+const KIMI_API_BASE =
+  process.env.KIMI_API_BASE?.trim() || "https://api.kimi.com/coding/v1";
+
+interface KimiTokenState {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number; // epoch seconds
+}
+
+let kimiTokens: KimiTokenState | null = null;
+let kimiRefreshInFlight: Promise<KimiTokenState> | null = null;
+
+function kimiConfigured(): boolean {
+  return Boolean(process.env.KIMI_REFRESH_TOKEN?.trim());
+}
+
+async function refreshKimiTokens(force = false): Promise<KimiTokenState> {
+  if (
+    !force &&
+    kimiTokens &&
+    Date.now() / 1000 < kimiTokens.expiresAt - 120
+  ) {
+    return kimiTokens;
+  }
+  if (kimiRefreshInFlight) return kimiRefreshInFlight;
+  const refreshToken = kimiTokens?.refreshToken || process.env.KIMI_REFRESH_TOKEN?.trim() || "";
+  kimiRefreshInFlight = (async () => {
+    try {
+      const response = await fetch(`${KIMI_OAUTH_HOST}/api/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: KIMI_CLIENT_ID,
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+        }).toString(),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        throw new Error(`Kimi OAuth refresh HTTP ${response.status}: ${body.slice(0, 200)}`);
+      }
+      const data: any = await response.json();
+      if (typeof data?.access_token !== "string") {
+        throw new Error("Kimi OAuth refresh returned no access_token.");
+      }
+      kimiTokens = {
+        accessToken: data.access_token,
+        refreshToken:
+          typeof data.refresh_token === "string" && data.refresh_token
+            ? data.refresh_token
+            : refreshToken,
+        expiresAt: Math.floor(Date.now() / 1000) + Number(data.expires_in || 900),
+      };
+      return kimiTokens;
+    } finally {
+      kimiRefreshInFlight = null;
+    }
+  })();
+  return kimiRefreshInFlight;
+}
+
+async function kimiFetch(
+  path: string,
+  init: RequestInit,
+  retriedAfterRefresh = false,
+): Promise<Response> {
+  const tokens = await refreshKimiTokens();
+  const response = await fetch(`${KIMI_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...(init.headers as Record<string, string>),
+      Authorization: `Bearer ${tokens.accessToken}`,
+    },
+  });
+  if (response.status === 401 && !retriedAfterRefresh) {
+    await refreshKimiTokens(true);
+    return kimiFetch(path, init, true);
+  }
+  return response;
+}
+
+async function runKimi(opts: VeraCompleteOptions): Promise<string> {
+  const messages = [
+    { role: "system" as const, content: opts.system },
+    ...opts.messages
+      .filter((m) => m.role !== "system")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+  ];
+
+  if (opts.onDelta) {
+    const response = await kimiFetch("/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: veraModel(),
+        max_tokens: opts.maxTokens,
+        messages,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(300_000),
+    });
+    if (!response.ok || !response.body) {
+      const body = await response.text().catch(() => "");
+      throw new Error(`Kimi HTTP ${response.status}: ${body.slice(0, 300)}`);
+    }
+    let full = "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const chunk = JSON.parse(payload);
+          const content = chunk?.choices?.[0]?.delta?.content;
+          if (typeof content === "string" && content) {
+            full += content;
+            opts.onDelta(content);
+          }
+        } catch {
+          // Ignore keep-alive / partial frames.
+        }
+      }
+    }
+    if (!full.trim()) {
+      throw new Error("Kimi returned no result text.");
+    }
+    return full;
+  }
+
+  const response = await kimiFetch("/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: veraModel(),
+      max_tokens: opts.maxTokens,
+      messages,
+    }),
+    signal: AbortSignal.timeout(300_000),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Kimi HTTP ${response.status}: ${body.slice(0, 300)}`);
+  }
+  const data: any = await response.json();
+  const text = String(data?.choices?.[0]?.message?.content ?? "").trim();
+  if (!text) {
+    throw new Error("Kimi returned an empty response.");
+  }
+  return text;
+}
+
+async function runKimiWithRetries(opts: VeraCompleteOptions, attempt = 1): Promise<string> {
+  try {
+    return await runKimi(opts);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isTransient(message) && attempt < 4) {
+      const delayMs = 5000 * 2 ** (attempt - 1); // 5s, 10s, 20s
+      console.log(
+        `[vera-llm] kimi transient error (attempt ${attempt}/4): ${message.slice(0, 100)} — retrying in ${delayMs}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return runKimiWithRetries(opts, attempt + 1);
+    }
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Claude Agent SDK backend (legacy, rollback-only).
+// ---------------------------------------------------------------------------
 
 // The Agent SDK subprocess inherits this env. Strip API keys so the SDK can NEVER
 // prefer them over the subscription OAuth token (which would silently bill a
@@ -225,6 +425,9 @@ async function runOpenAiCompatible(opts: VeraCompleteOptions): Promise<string> {
 export async function veraComplete(opts: VeraCompleteOptions): Promise<string> {
   if (process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
     return runOpenAiCompatible(opts);
+  }
+  if (kimiConfigured()) {
+    return runKimiWithRetries(opts);
   }
   const text = await runClaude(opts);
   opts.onDelta?.(text);

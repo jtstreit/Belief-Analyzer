@@ -5,6 +5,7 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OpenaiMessageInputCoachingApproach } from './openaiMessageInputCoachingApproach';
 
 export interface OpenaiMessageInput {
   content: string;
@@ -12,4 +13,6 @@ export interface OpenaiMessageInput {
   modality?: string;
   /** Optional context from a completed exercise to anchor the coaching */
   exerciseContext?: string;
+  /** Explicit framework; supports legacy conversations without a persisted value */
+  coachingApproach?: OpenaiMessageInputCoachingApproach;
 }

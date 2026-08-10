@@ -49,7 +49,7 @@ function RootLayoutNav() {
         name="coach-session/[id]"
         options={{
           headerShown: true,
-          title: "Vera — Coach",
+          title: "Work This Thought",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
         }}
@@ -66,6 +66,12 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="exercise/[exerciseId]"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="work/[kind]/[id]"
         options={{
           headerShown: false,
         }}

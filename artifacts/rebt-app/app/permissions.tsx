@@ -91,7 +91,7 @@ export default function DataPipelineScreen() {
 
   const runPipeline = async () => {
     if (working) return;
-    setResult("Pulling protected LifeOps signals…");
+    setResult("Pulling LifeOps signals through the Monarch-work filter…");
     try {
       const synced = await sync.mutateAsync();
       if (synced.ingested > 0) {
@@ -110,8 +110,8 @@ export default function DataPipelineScreen() {
       ]);
       setResult(
         synced.ingested > 0
-          ? `${synced.ingested} new signal${synced.ingested === 1 ? "" : "s"} processed. ${synced.filteredClinical + synced.filteredLocation} protected.`
-          : `Already current. ${synced.filteredClinical + synced.filteredLocation} protected.`,
+          ? `${synced.ingested} new signal${synced.ingested === 1 ? "" : "s"} processed. ${synced.filteredClinical} Monarch-work protected.`
+          : `Already current. ${synced.filteredClinical} Monarch-work protected.`,
       );
     } catch {
       setResult(
@@ -147,7 +147,7 @@ export default function DataPipelineScreen() {
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             LifeOps collects phone-screen telemetry. Belief Analyzer filters it,
-            then Opus 4.8 identifies suspected automatic thoughts, distortions,
+            then Kimi K3 identifies suspected automatic thoughts, distortions,
             beliefs, and core schemas.
           </Text>
         </View>
@@ -162,8 +162,8 @@ export default function DataPipelineScreen() {
           />
           <PipelineRow
             icon="shield"
-            title="Clinical-content firewall"
-            detail="Clinical/EHR matches and location events are rejected before database storage or AI analysis. Raw LifeOps metadata is discarded."
+            title="Monarch-work firewall"
+            detail="Monarch work and EHR matches are rejected before database storage or AI analysis. Personal location and Microsoft context remains eligible. Raw LifeOps metadata is discarded."
             status="Enabled"
             healthy={status?.clinicalFilterEnabled ?? true}
           />
@@ -171,8 +171,8 @@ export default function DataPipelineScreen() {
             icon="cpu"
             title="Cognitive engine"
             detail="Layered extraction: automatic thoughts → distortions → intermediate beliefs → core schemas."
-            status="Opus 4.8"
-            healthy={status?.model === "claude-opus-4-8"}
+            status={status?.model ? status.model : "Kimi K3"}
+            healthy={Boolean(status?.model)}
           />
         </View>
 

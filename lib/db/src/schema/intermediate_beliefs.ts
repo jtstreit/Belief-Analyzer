@@ -1,4 +1,12 @@
-import { pgTable, serial, text, integer, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  timestamp,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -26,7 +34,14 @@ export const intermediateBeliefsCogTable = pgTable(
     // re-analysis cannot resurrect a pruned or manually dismissed belief.
     status: text("status").notNull().default("active"),
     dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewStatus: text("review_status")
+      .$type<"unreviewed" | "endorsed" | "rejected" | "irrelevant">()
+      .notNull()
+      .default("unreviewed"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
@@ -38,10 +53,15 @@ export const intermediateBeliefsCogTable = pgTable(
   ],
 );
 
-export const insertIntermediateBeliefSchema = createInsertSchema(intermediateBeliefsCogTable).omit({
+export const insertIntermediateBeliefSchema = createInsertSchema(
+  intermediateBeliefsCogTable,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
-export type InsertIntermediateBelief = z.infer<typeof insertIntermediateBeliefSchema>;
-export type IntermediateBelief = typeof intermediateBeliefsCogTable.$inferSelect;
+export type InsertIntermediateBelief = z.infer<
+  typeof insertIntermediateBeliefSchema
+>;
+export type IntermediateBelief =
+  typeof intermediateBeliefsCogTable.$inferSelect;

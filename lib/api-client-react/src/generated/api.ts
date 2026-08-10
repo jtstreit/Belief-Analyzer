@@ -27,6 +27,7 @@ import type {
   BeliefInput,
   BeliefUpdate,
   CognitiveMindMap,
+  CognitiveReviewInput,
   CoreSchema,
   Exercise,
   ExerciseSession,
@@ -1217,6 +1218,78 @@ export function useListAutomaticThoughts<TData = Awaited<ReturnType<typeof listA
 
 
 
+export const getReviewAutomaticThoughtUrl = (id: number,) => {
+
+
+
+
+  return `/api/cognitive/automatic-thoughts/${id}`
+}
+
+/**
+ * @summary Save or revise the user's review of an automatic-thought suggestion
+ */
+export const reviewAutomaticThought = async (id: number,
+    cognitiveReviewInput: CognitiveReviewInput, options?: RequestInit): Promise<AutomaticThought> => {
+
+  return customFetch<AutomaticThought>(getReviewAutomaticThoughtUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cognitiveReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewAutomaticThoughtMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAutomaticThought>>, TError,{id: number;data: BodyType<CognitiveReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewAutomaticThought>>, TError,{id: number;data: BodyType<CognitiveReviewInput>}, TContext> => {
+
+const mutationKey = ['reviewAutomaticThought'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewAutomaticThought>>, {id: number;data: BodyType<CognitiveReviewInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewAutomaticThought(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewAutomaticThoughtMutationResult = NonNullable<Awaited<ReturnType<typeof reviewAutomaticThought>>>
+    export type ReviewAutomaticThoughtMutationBody = BodyType<CognitiveReviewInput>
+    export type ReviewAutomaticThoughtMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save or revise the user's review of an automatic-thought suggestion
+ */
+export const useReviewAutomaticThought = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAutomaticThought>>, TError,{id: number;data: BodyType<CognitiveReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewAutomaticThought>>,
+        TError,
+        {id: number;data: BodyType<CognitiveReviewInput>},
+        TContext
+      > => {
+      return useMutation(getReviewAutomaticThoughtMutationOptions(options));
+    }
+
 export const getListIntermediateBeliefsUrl = () => {
 
 
@@ -1370,6 +1443,78 @@ export function useListCoreSchemas<TData = Awaited<ReturnType<typeof listCoreSch
 
 
 
+
+export const getReviewIntermediateBeliefUrl = (id: number,) => {
+
+
+
+
+  return `/api/cognitive/intermediate-beliefs/${id}`
+}
+
+/**
+ * @summary Save or revise the user's review of an intermediate-belief suggestion
+ */
+export const reviewIntermediateBelief = async (id: number,
+    cognitiveReviewInput: CognitiveReviewInput, options?: RequestInit): Promise<IntermediateBelief> => {
+
+  return customFetch<IntermediateBelief>(getReviewIntermediateBeliefUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cognitiveReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewIntermediateBeliefMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewIntermediateBelief>>, TError,{id: number;data: BodyType<CognitiveReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewIntermediateBelief>>, TError,{id: number;data: BodyType<CognitiveReviewInput>}, TContext> => {
+
+const mutationKey = ['reviewIntermediateBelief'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewIntermediateBelief>>, {id: number;data: BodyType<CognitiveReviewInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewIntermediateBelief(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewIntermediateBeliefMutationResult = NonNullable<Awaited<ReturnType<typeof reviewIntermediateBelief>>>
+    export type ReviewIntermediateBeliefMutationBody = BodyType<CognitiveReviewInput>
+    export type ReviewIntermediateBeliefMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Save or revise the user's review of an intermediate-belief suggestion
+ */
+export const useReviewIntermediateBelief = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewIntermediateBelief>>, TError,{id: number;data: BodyType<CognitiveReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewIntermediateBelief>>,
+        TError,
+        {id: number;data: BodyType<CognitiveReviewInput>},
+        TContext
+      > => {
+      return useMutation(getReviewIntermediateBeliefMutationOptions(options));
+    }
 
 export const getDismissIntermediateBeliefUrl = (id: number,) => {
 

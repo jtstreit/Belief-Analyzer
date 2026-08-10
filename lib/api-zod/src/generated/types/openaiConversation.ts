@@ -5,9 +5,15 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OpenaiConversationCoachingApproach } from './openaiConversationCoachingApproach';
 
 export interface OpenaiConversation {
   id: number;
   title: string;
+  selectedBeliefId?: number | null;
+  selectedAutomaticThoughtId?: number | null;
+  selectedIntermediateBeliefId?: number | null;
+  /** Persisted framework for new conversations; null on legacy rows */
+  coachingApproach: OpenaiConversationCoachingApproach;
   createdAt: Date;
 }

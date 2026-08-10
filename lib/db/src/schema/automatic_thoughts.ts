@@ -1,4 +1,13 @@
-import { pgTable, serial, text, integer, jsonb, timestamp, index, foreignKey } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  jsonb,
+  timestamp,
+  index,
+  foreignKey,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { telemetryEventsTable } from "./telemetry_events";
@@ -23,9 +32,19 @@ export const automaticThoughtsTable = pgTable(
     thoughtText: text("thought_text").notNull(),
     emotion: text("emotion"),
     intensityPct: integer("intensity_pct"), // 0–100
-    distortionTags: jsonb("distortion_tags").$type<string[]>().notNull().default([]),
+    distortionTags: jsonb("distortion_tags")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     telemetryEventId: integer("telemetry_event_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewStatus: text("review_status")
+      .$type<"unreviewed" | "endorsed" | "rejected" | "irrelevant">()
+      .notNull()
+      .default("unreviewed"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
     index("auto_thought_created_idx").on(table.createdAt),
@@ -38,9 +57,13 @@ export const automaticThoughtsTable = pgTable(
   ],
 );
 
-export const insertAutomaticThoughtSchema = createInsertSchema(automaticThoughtsTable).omit({
+export const insertAutomaticThoughtSchema = createInsertSchema(
+  automaticThoughtsTable,
+).omit({
   id: true,
   createdAt: true,
 });
-export type InsertAutomaticThought = z.infer<typeof insertAutomaticThoughtSchema>;
+export type InsertAutomaticThought = z.infer<
+  typeof insertAutomaticThoughtSchema
+>;
 export type AutomaticThought = typeof automaticThoughtsTable.$inferSelect;

@@ -5,6 +5,7 @@
  * REBT Companion API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomaticThoughtReviewStatus } from './automaticThoughtReviewStatus';
 
 export interface AutomaticThought {
   id: number;
@@ -18,5 +19,8 @@ export interface AutomaticThought {
   distortionTags: string[];
   /** @nullable */
   telemetryEventId?: number | null;
+  reviewStatus: AutomaticThoughtReviewStatus;
+  /** @nullable */
+  reviewedAt: Date | null;
   createdAt: Date;
 }

@@ -147,7 +147,7 @@ export default function DataPipelineScreen() {
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             LifeOps collects phone-screen telemetry. Belief Analyzer filters it,
-            then Opus 4.8 identifies suspected automatic thoughts, distortions,
+            then Kimi K3 identifies suspected automatic thoughts, distortions,
             beliefs, and core schemas.
           </Text>
         </View>
@@ -171,8 +171,8 @@ export default function DataPipelineScreen() {
             icon="cpu"
             title="Cognitive engine"
             detail="Layered extraction: automatic thoughts → distortions → intermediate beliefs → core schemas."
-            status="Opus 4.8"
-            healthy={status?.model === "claude-opus-4-8"}
+            status={status?.model ? status.model : "Kimi K3"}
+            healthy={Boolean(status?.model)}
           />
         </View>
 

@@ -1,4 +1,5 @@
 import { db, telemetryEventsTable } from "@workspace/db";
+import { DEFAULT_VERA_MODEL } from "@workspace/integrations-openai-ai-server";
 import { applyLifeOpsPolicy } from "./lifeops-policy";
 import { logger } from "./logger";
 
@@ -113,7 +114,7 @@ export function getLifeOpsStatus() {
   return {
     configured: Boolean(getToken()),
     source: "LifeOps Sentinel",
-    model: "claude-opus-4-8",
+    model: DEFAULT_VERA_MODEL,
     clinicalFilterEnabled: true,
     lastSyncAt,
     lastSyncCount,

@@ -1,7 +1,8 @@
-# Render Blueprint — Belief Analyzer API (Express 5 + Claude Agent SDK)
+# Render Blueprint — Belief Analyzer API (Express 5 + Kimi Code API)
 # Cloud-hosts artifacts/api-server so the phone app reaches Vera with the PC off.
-# LLM route: veraComplete -> Claude Agent SDK on CLAUDE_CODE_OAUTH_TOKEN (Max
-# subscription, zero API spend — same token the cbt-sentinel/lifeops services use).
+# LLM route: veraComplete -> Kimi Code API (model k3) on Jackson's Kimi
+# subscription OAuth — KIMI_REFRESH_TOKEN refreshes short-lived access tokens
+# in-process. Zero API spend; Claude Max OAuth route retired 2026-08-09.
 # Never set AI_INTEGRATIONS_OPENAI_BASE_URL here: that selects the OpenAI-compat
 # backend, which is the local mock-LLM verification seam only.
 services:
@@ -16,9 +17,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "24.16.0"
-      # Max-subscription OAuth token (claude setup-token) — paste in dashboard,
-      # same value as cbt-sentinel-api / sentinel-lifeops-api.
-      - key: CLAUDE_CODE_OAUTH_TOKEN
+      # Kimi subscription OAuth refresh token (from `kimi login` device flow) —
+      # paste in dashboard. Vera runs on Kimi K3 with this credential.
+      - key: KIMI_REFRESH_TOKEN
         sync: false
       # Dedicated Render Postgres (belief-analyzer-db) — link via "Add from database".
       - key: DATABASE_URL
